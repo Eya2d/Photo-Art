@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="Image/logo.png">
+<title>View file - PDF viewer with share & download</title>
+<!-- Ionicons -->
+<script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
+<!-- Wave & Title effects (保持不变) -->
+<script src="https://cdn.jsdelivr.net/gh/IconCanyon/Icon-canyon@main/Wave-cloud-3.0.0.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/IconCanyon/Icon-canyon@main/Title-Style-1.0.0.js"></script>
+<!-- jsPDF لإنشاء ملف PDF -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<style>
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    display: flex;
+    height: 100vh;
+    user-select: none;
+}
+
+img {
+    user-select: none !important;
+    -webkit-user-drag: none !important;
+    display: flex !important;
+}
+
+.flexe {
+    display: flex;
+    align-items: center;
+}
+
+.flex {
+    margin-top: 56px;
+    height: -webkit-fill-available;
+    width: 100%;
+    display: flex;
+}
+
+button {
+    cursor: pointer;
+    font-family: Arial;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    background-color: #0000;
+}
+
+/* القائمة الجانبية */
+#sidebar {
+    width: 300px;
+    padding: 24px 0;
+    background: #f6f8fa;
+    overflow-y: auto;
+    border-right: 1px solid #d1d9e0;
+}
+
+.sidebar-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+    width: max-content;
+    margin: auto;
+}
+.sidebar-item:not(:last-child) {
+    margin-bottom: 10px; 
+}
+
+.sidebar-item-inner {
+    position: relative;
+    overflow: hidden;
+    height: 152px;
+    width: 108px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* padding: 4px; */
+    background: #fff;
+}
+.sidebar-item-inner .ripple {
+    background-color: #5197ff48;
+}
+
+.sidebar-item-inner::after {
+    position: absolute;
+    z-index: 5;
+    content: '';
+    width: 100%;
+    height: 100%;
+    left: 0;
+    top: 0;
+    opacity: .5;
+    background-color: white;
+}
+.sidebar-item-inner:hover:after {
+    opacity: .2;
+}
+
+.sidebar-item-inner canvas {
+    max-width: 100px;
+    max-height: 100px;
+    object-fit: cover;
+}
+
+.sidebar-item.active .sidebar-item-inner {
+    box-shadow: 0 0 0 6px rgb(138,180,248);
+}
+.sidebar-item.active ::after {
+    opacity: 0 !important;
+}
+
+.page-number {
+    margin-top: 14px;
+    font-size: 14px;
+}
+
+/* ديف العرض */
+#page-view {
+    flex: 1;
+    overflow-y: auto;
+    background: #f0f0f0;
+    scroll-behavior: smooth;
+}
+
+.page-container {
+    width: 794px;   /* عرض A4 بالبيكسل */
+    height: 1123px; /* ارتفاع A4 بالبيكسل */
+    background: white;
+    display: flex;
+    justify-content: center;
+    margin: 0 auto;
+    align-items: center;
+    box-shadow: 0 0 10px rgb(85 93 107 / 30%);
+}
+
+.page-container:not(:last-child) { margin-bottom: 20px !important; }
+
+.page-container canvas {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.back {
+    position: absolute;
+    z-index: 50;
+    bottom: 0;
+    right: 0;
+    padding: 10px 20px;
+    padding-right: 17px;
+    margin: 20px;
+    border: solid 1px #ccc;
+    border-radius: 25px;
+    background: white;
+    box-shadow: 0px 3px 7px #55647a61;
+}
+.back ion-icon { font-size: 20px; margin-left: 8px; }
+
+.menu {
+    position: fixed;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    background-color: #f6f8fa;
+    box-shadow: 0px 1px 0px #d1d9e0;
+}
+.menu .logo {
+    display: flex;
+    align-items: center;
+    width: max-content;
+    font-size: 18px;
+}
+.menu .logo img {
+    height: 30px;
+    margin-right: 8px;
+}
+.menu .logo span {
+    color: #5197ff;
+    margin: 0 2px;
+}
+
+.menu .flexe button {
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 25px;
+    margin-left: 8px;
+    font-size: 24px;
+    transition: background-color 0.2s;
+}
+.menu .flexe button:hover {
+    background-color: #e0e4e9;
+}
+.menu .flexe button:disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+</style>
+</head>
+<body>
+
+<div class="menu">
+    <div class="logo"><img src="Image/logo.png" alt=""> Photo Art ( <span title="Display version">View</span> )</div>
+
+    <div class="flexe Wave-all-center">
+        <!-- تم إضافة id لتحديد الأزرار -->
+        <button id="share-button" title="Share the file"><ion-icon name="arrow-redo-outline"></ion-icon></button>
+        <button id="download-button" title="Download file"><ion-icon name="arrow-down-circle-outline"></ion-icon></button>
+    </div>
+</div>
+
+<div class="flex">
+    <div id="sidebar"></div>
+    <div id="page-view"></div>
+</div>
+
+<a href="index.html"><button class="back Wave-cloud">Going back <ion-icon name="arrow-forward-outline"></ion-icon></button></a>
+
+<script>
+const sidebar = document.getElementById('sidebar');
+const pageView = document.getElementById('page-view');
+
+let images = JSON.parse(localStorage.getItem('pdfImages') || '[]');
+let pageContainers = [];
+
+// دالة لتأخير التنفيذ (تستخدم في العرض التدريجي)
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// =======================================
+// تحميل الصور واحدًا تلو الآخر للقائمة الجانبية
+// =======================================
+async function displaySidebar() {
+    sidebar.innerHTML = '';
+    for (let index = 0; index < images.length; index++) {
+        const src = images[index];
+
+        const item = document.createElement('div');
+        item.classList.add('sidebar-item');
+        if(index === 0) item.classList.add('active');
+
+        const inner = document.createElement('div');
+        inner.classList.add('sidebar-item-inner', 'Wave-cloud');
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 300;
+        canvas.height = 300;
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+
+        const image = new Image();
+        image.src = src;
+        image.onload = () => {
+            ctx.clearRect(0,0,canvas.width,canvas.height);
+            let scale = Math.min(canvas.width / image.width, canvas.height / image.height);
+            let w = image.width * scale;
+            let h = image.height * scale;
+            ctx.drawImage(image, (canvas.width-w)/2, (canvas.height-h)/2, w, h);
+        };
+
+        inner.appendChild(canvas);
+
+        const pageNum = document.createElement('div');
+        pageNum.classList.add('page-number');
+        pageNum.textContent = `${index + 1}`;
+
+        item.appendChild(inner);
+        item.appendChild(pageNum);
+
+        item.addEventListener('click', () => scrollToPage(index));
+
+        sidebar.appendChild(item);
+
+        await delay(1); // تأخير 1 ملي ثانية
+    }
+}
+
+// =======================================
+// تحميل الصور واحدًا تلو الآخر لديف العرض
+// =======================================
+async function displayPages() {
+    pageView.innerHTML = '';
+    pageContainers = [];
+
+    for (let index = 0; index < images.length; index++) {
+        const src = images[index];
+
+        const container = document.createElement('div');
+        container.classList.add('page-container');
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const scaleFactor = 3;
+        canvas.width = 794 * scaleFactor;
+        canvas.height = 1123 * scaleFactor;
+        canvas.style.width = '794px';
+        canvas.style.height = '1123px';
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+
+        const image = new Image();
+        image.src = src;
+        image.onload = () => {
+            ctx.clearRect(0,0,canvas.width,canvas.height);
+            let scale = Math.min(canvas.width / image.width, canvas.height / image.height);
+            let w = image.width * scale;
+            let h = image.height * scale;
+            ctx.drawImage(image, (canvas.width-w)/2, (canvas.height-h)/2, w, h);
+        };
+
+        container.appendChild(canvas);
+        pageView.appendChild(container);
+        pageContainers.push(container);
+
+        await delay(1); // تأخير 1 ملي ثانية
+    }
+}
+
+// =======================================
+// دوال التمرير والاختيار
+// =======================================
+function scrollToPage(index) {
+    pageContainers[index].scrollIntoView({behavior: 'smooth', block: 'start'});
+    updateSidebarActive(index);
+}
+
+function updateSidebarActive(index) {
+    Array.from(sidebar.children).forEach((el, i) => {
+        el.classList.toggle('active', i === index);
+    });
+}
+
+pageView.addEventListener('scroll', () => {
+    let viewTop = pageView.scrollTop;
+    let closestIndex = 0;
+    let minDist = Infinity;
+    pageContainers.forEach((container, i) => {
+        const offset = container.offsetTop - viewTop;
+        if(Math.abs(offset) < minDist) {
+            minDist = Math.abs(offset);
+            closestIndex = i;
+        }
+    });
+    updateSidebarActive(closestIndex);
+
+    const activeItem = sidebar.children[closestIndex];
+    if(activeItem) activeItem.scrollIntoView({behavior:'smooth', block:'center'});
+});
+
+// =======================================
+// وظائف مشاركة وتنزيل PDF
+// =======================================
+
+// دالة مساعدة لاستخراع نوع الصورة من base64
+function getImageTypeFromBase64(str) {
+    if (str.startsWith('data:image/jpeg')) return 'JPEG';
+    if (str.startsWith('data:image/png')) return 'PNG';
+    // افتراضي
+    return 'JPEG';
+}
+
+// إنشاء PDF وعرضه كـ blob
+async function generatePDFBlob() {
+    const { jsPDF } = window.jspdf;
+    // إنشاء مستند PDF بحجم A4، وحدة pt (نقطة)
+    const pdf = new jsPDF({
+        orientation: 'p',
+        unit: 'pt',
+        format: 'a4'
+    });
+
+    const pageWidth = pdf.internal.pageSize.getWidth();   // 595.28 pt تقريباً
+    const pageHeight = pdf.internal.pageSize.getHeight(); // 841.89 pt
+
+    for (let i = 0; i < images.length; i++) {
+        const src = images[i];
+        const imgType = getImageTypeFromBase64(src);
+
+        // تحميل الصورة للحصول على أبعادها
+        const img = new Image();
+        img.src = src;
+        await new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = reject;
+        });
+
+        // حساب الأبعاد المناسبة لتناسب الصفحة مع الحفاظ على النسبة
+        const ratio = Math.min(pageWidth / img.width, pageHeight / img.height);
+        const w = img.width * ratio;
+        const h = img.height * ratio;
+        const x = (pageWidth - w) / 2;
+        const y = (pageHeight - h) / 2;
+
+        // إضافة الصورة (بدون ضغط إضافي للحفاظ على الجودة)
+        pdf.addImage(src, imgType, x, y, w, h);
+
+        // إذا لم تكن آخر صفحة، أضف صفحة جديدة
+        if (i < images.length - 1) {
+            pdf.addPage();
+        }
+    }
+
+    // إرجاع الـ PDF كـ blob
+    return pdf.output('blob');
+}
+
+// تنزيل PDF
+async function downloadPDF() {
+    const downloadBtn = document.getElementById('download-button');
+    const shareBtn = document.getElementById('share-button');
+    // تعطيل الأزرار مؤقتاً
+    downloadBtn.disabled = true;
+    shareBtn.disabled = true;
+
+    try {
+        // يمكن إظهار رسالة (بسيطة)
+        console.log('جاري إنشاء PDF للتنزيل...');
+        const blob = await generatePDFBlob();
+        // إنشاء رابط تحميل
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'document.pdf'; // اسم الملف
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    } catch (error) {
+        console.error('فشل إنشاء PDF:', error);
+        alert('حدث خطأ أثناء إنشاء ملف PDF.');
+    } finally {
+        downloadBtn.disabled = false;
+        shareBtn.disabled = false;
+    }
+}
+
+// مشاركة PDF باستخدام Web Share API
+async function sharePDF() {
+    const downloadBtn = document.getElementById('download-button');
+    const shareBtn = document.getElementById('share-button');
+
+    // تحقق من دعم المشاركة
+    if (!navigator.share) {
+        alert('متصفحك لا يدعم خاصية المشاركة. يمكنك استخدام زر التنزيل بدلاً من ذلك.');
+        return;
+    }
+
+    shareBtn.disabled = true;
+    downloadBtn.disabled = true;
+
+    try {
+        console.log('جاري إنشاء PDF للمشاركة...');
+        const blob = await generatePDFBlob();
+        // تحويل blob إلى File object
+        const file = new File([blob], 'document.pdf', { type: 'application/pdf' });
+
+        await navigator.share({
+            title: 'مشاركة ملف PDF',
+            text: 'تم إنشاء PDF من الصور',
+            files: [file]
+        });
+        console.log('تمت المشاركة بنجاح');
+    } catch (error) {
+        if (error.name !== 'AbortError') {
+            console.error('فشل المشاركة:', error);
+            alert('حدث خطأ أثناء المشاركة. قد لا يدعم المتصفح مشاركة الملفات.');
+        }
+    } finally {
+        shareBtn.disabled = false;
+        downloadBtn.disabled = false;
+    }
+}
+
+// =======================================
+// التنفيذ عند تحميل الصفحة
+// =======================================
+(async () => {
+    await displaySidebar();
+    await displayPages();
+    scrollToPage(0);
+
+    // إضافة مستمعي الأحداث للأزرار بعد تحميل المحتوى
+    document.getElementById('share-button').addEventListener('click', sharePDF);
+    document.getElementById('download-button').addEventListener('click', downloadPDF);
+})();
+</script>
+
+</body>
+</html>

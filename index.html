@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Uploading Images</title>
+
+<link rel="icon" href="Image/logo.png">
+<script src="https://cdn.jsdelivr.net/gh/IconCanyon/Icon-canyon@main/Wave-cloud-3.0.0.js"></script>
+
+<style>
+body {
+    font-family: Arial, sans-serif;
+    background: #f9f9f9;
+    text-align: center;
+    padding: 20px;
+    user-select: none;
+}
+
+img {
+    user-select: none !important;
+    -webkit-user-drag: none !important;
+}
+
+button {
+    cursor: pointer;
+}
+
+.logo {
+    margin-top: 30px;
+    margin: 0 auto;
+}
+.logo img {
+    height: 90px;
+}
+
+#drop-area {
+    border: 2px dashed #ccc;
+    padding: 30px;
+    margin-bottom: 20px !important;
+    background: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    max-width: 100%;
+    width: 400px;
+    height: 150px;
+    margin: auto;
+}
+
+#drop-area.hover {
+    border-color: #333;
+}
+
+#gallery {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+}
+
+#gallery img {
+    width: 100px;
+    height: 100px;
+    object-fit: cover;
+    cursor: pointer;
+    border: 1px solid #ccc;
+}
+
+button {
+    padding: 10px 20px;
+    padding-right: 17px;
+    margin: 20px;
+    border: solid 1px #ccc;
+    border-radius: 25px;
+    background: white;
+    box-shadow: 0px 3px 7px #55647a61;
+}
+</style>
+</head>
+<body>
+
+    <div class="logo"><img src="Image/logo.png" alt=""></div>
+
+<h1>Drag & Drop Images or Click to Upload</h1>
+<div id="drop-area" class="Wave-cloud">
+    Drag images here or click to select files
+    <input type="file" id="fileElem" multiple style="display:none">
+</div>
+
+<div id="gallery"></div>
+
+<button id="viewBtn" class="Wave-cloud">View Files</button>
+
+<script>
+const dropArea = document.getElementById('drop-area');
+const fileElem = document.getElementById('fileElem');
+const gallery = document.getElementById('gallery');
+let images = [];
+
+// Open file selector on click
+dropArea.addEventListener('click', () => fileElem.click());
+
+// Handle file selection
+fileElem.addEventListener('change', (e) => handleFiles(e.target.files));
+
+// Drag & drop events
+dropArea.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropArea.classList.add('hover');
+});
+dropArea.addEventListener('dragleave', () => dropArea.classList.remove('hover'));
+dropArea.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropArea.classList.remove('hover');
+    handleFiles(e.dataTransfer.files);
+});
+
+// Process files
+function handleFiles(files) {
+    for (let file of files) {
+        if (!file.type.startsWith('image/')) continue;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            images.push(e.target.result);
+            displayGallery();
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+// Display thumbnails
+function displayGallery() {
+    gallery.innerHTML = '';
+    images.forEach((src, index) => {
+        const img = document.createElement('img');
+        img.src = src;
+        gallery.appendChild(img);
+    });
+}
+
+// Go to viewer page and save images in localStorage
+document.getElementById('viewBtn').addEventListener('click', () => {
+    if (images.length === 0) {
+        alert('Please upload images first');
+        return;
+    }
+    localStorage.setItem('pdfImages', JSON.stringify(images));
+    window.location.href = 'viewer.html';
+});
+</script>
+
+</body>
+</html>
