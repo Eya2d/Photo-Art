@@ -58,7 +58,7 @@ button {
     border-right: 1px solid #d1d9e0;
     touch-action: none; /* للسحب على الهواتف */
     /* حركة السلايدر خارج JS */
-    transition: left 0.1s ease; /* هذا الجزء يجعل التحريك سلس */
+    transition: left 0.6s ease; /* الوقت 0.6 ثانية لتظهر وتختفي ببطء */
 }
 
 .sidebar-item {
@@ -247,6 +247,13 @@ button {
         left: 0;
         opacity: 1;
     }
+    element.style {
+    transition: none;
+    left: -251px;
+    }
+    .back {
+        position: fixed;
+    }
 }
 </style>
 </head>
@@ -272,332 +279,6 @@ button {
 
 <a href="index.html"><button class="back Wave-cloud">Going back <ion-icon name="arrow-forward-outline"></ion-icon></button></a>
 
-<script>
-const sidebar = document.getElementById('sidebar');
-const pageView = document.getElementById('page-view');
-
-let images = JSON.parse(localStorage.getItem('pdfImages') || '[]');
-let pageContainers = [];
-
-// دالة تأخير
-function delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-// =======================================
-// عرض القائمة الجانبية
-// =======================================
-async function displaySidebar() {
-    sidebar.innerHTML = '';
-
-    for (let index = 0; index < images.length; index++) {
-        const src = images[index];
-
-        const item = document.createElement('div');
-        item.classList.add('sidebar-item');
-        if (index === 0) item.classList.add('active');
-
-        const inner = document.createElement('div');
-        inner.classList.add('sidebar-item-inner', 'Wave-cloud');
-
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        canvas.width = 300;
-        canvas.height = 300;
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = "high";
-
-        const image = new Image();
-        image.src = src;
-        image.onload = () => {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            let scale = Math.min(canvas.width / image.width, canvas.height / image.height);
-            let w = image.width * scale;
-            let h = image.height * scale;
-            ctx.drawImage(image, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
-        };
-
-        inner.appendChild(canvas);
-
-        const pageNum = document.createElement('div');
-        pageNum.classList.add('page-number');
-        pageNum.textContent = `${index + 1}`;
-
-        item.appendChild(inner);
-        item.appendChild(pageNum);
-
-        item.addEventListener('click', () => scrollToPage(index));
-
-        sidebar.appendChild(item);
-        await delay(1);
-    }
-}
-
-// =======================================
-// عرض الصفحات
-// =======================================
-async function displayPages() {
-    pageView.innerHTML = '';
-    pageContainers = [];
-
-    for (let index = 0; index < images.length; index++) {
-        const src = images[index];
-
-        const container = document.createElement('div');
-        container.classList.add('page-container');
-
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-
-        const scaleFactor = 3;
-        canvas.width = 794 * scaleFactor;
-        canvas.height = 1123 * scaleFactor;
-        canvas.style.width = '794px';
-        canvas.style.height = '1123px';
-
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = "high";
-
-        const image = new Image();
-        image.src = src;
-        image.onload = () => {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            let scale = Math.min(canvas.width / image.width, canvas.height / image.height);
-            let w = image.width * scale;
-            let h = image.height * scale;
-            ctx.drawImage(image, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
-        };
-
-        container.appendChild(canvas);
-        pageView.appendChild(container);
-        pageContainers.push(container);
-
-        await delay(1);
-    }
-}
-
-// =======================================
-// التمرير إلى صفحة
-// =======================================
-function scrollToPage(index) {
-    pageContainers[index].scrollIntoView({
-        behavior: 'smooth',
-        block: 'start'
-    });
-    updateSidebarActive(index);
-}
-
-// =======================================
-// تحديث العنصر النشط + تمرير القائمة الجانبية
-// =======================================
-function updateSidebarActive(index) {
-    Array.from(sidebar.children).forEach((el, i) => {
-        if (i === index) {
-            el.classList.add('active');
-
-            // تمرير القائمة الجانبية تلقائياً للعنصر
-            el.scrollIntoView({
-                behavior: 'smooth',
-                block: 'center'
-            });
-
-        } else {
-            el.classList.remove('active');
-        }
-    });
-}
-
-// =======================================
-// تتبع الصفحة الحالية بدقة
-// =======================================
-pageView.addEventListener('scroll', () => {
-    let viewMiddle = pageView.scrollTop + pageView.clientHeight / 2;
-
-    let closestIndex = 0;
-    let minDist = Infinity;
-
-    pageContainers.forEach((container, i) => {
-        const containerMiddle = container.offsetTop + container.offsetHeight / 2;
-        const dist = Math.abs(containerMiddle - viewMiddle);
-
-        if (dist < minDist) {
-            minDist = dist;
-            closestIndex = i;
-        }
-    });
-
-    updateSidebarActive(closestIndex);
-});
-
-// =======================================
-// نوع الصورة
-// =======================================
-function getImageTypeFromBase64(str) {
-    if (str.startsWith('data:image/jpeg')) return 'JPEG';
-    if (str.startsWith('data:image/png')) return 'PNG';
-    return 'JPEG';
-}
-
-// =======================================
-// إنشاء PDF مع دعم الشفافية
-// =======================================
-async function generatePDFBlob() {
-    const { jsPDF } = window.jspdf;
-
-    const pdf = new jsPDF({
-        orientation: 'p',
-        unit: 'in',
-        format: [6, 9]
-    });
-
-    const pageWidth = 6;
-    const pageHeight = 9;
-
-    const marginTop = 0.5;
-    const marginBottom = 0.75;
-    const marginOuter = 0.5;
-    const marginInner = 0.75;
-
-    for (let i = 0; i < images.length; i++) {
-
-    let src = images[i]; // <-- هنا نغير const إلى let
-
-    let imgType = getImageTypeFromBase64(src);
-    if (imgType !== 'PNG') {
-        // تحويل JPEG إلى PNG للحفاظ على الشفافية
-        const tempCanvas = document.createElement('canvas');
-        const tempCtx = tempCanvas.getContext('2d');
-
-        const tempImg = new Image();
-        tempImg.src = src;
-        await new Promise((res, rej) => {
-            tempImg.onload = res;
-            tempImg.onerror = rej;
-        });
-
-        tempCanvas.width = tempImg.width;
-        tempCanvas.height = tempImg.height;
-        tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
-        tempCtx.drawImage(tempImg, 0, 0);
-
-        src = tempCanvas.toDataURL('image/png'); // الآن PNG
-        imgType = 'PNG';
-    }
-
-        const isEven = (i + 1) % 2 === 0;
-        const marginLeft = isEven ? marginOuter : marginInner;
-        const marginRight = isEven ? marginInner : marginOuter;
-
-        const contentWidth = pageWidth - marginLeft - marginRight;
-        const contentHeight = pageHeight - marginTop - marginBottom;
-
-        const img = new Image();
-        img.src = src;
-
-        await new Promise((res, rej) => {
-            img.onload = res;
-            img.onerror = rej;
-        });
-
-        const ratio = Math.min(
-            contentWidth / (img.width / 300),
-            contentHeight / (img.height / 300)
-        );
-
-        const w = (img.width / 300) * ratio;
-        const h = (img.height / 300) * ratio;
-
-        const x = marginLeft + (contentWidth - w) / 2;
-        const y = marginTop + (contentHeight - h) / 2;
-
-        pdf.addImage(src, imgType, x, y, w, h, undefined, 'FAST');
-
-        pdf.setFont("helvetica", "normal");
-        pdf.setFontSize(10);
-        pdf.text(
-            String(i + 1),
-            pageWidth / 2,
-            pageHeight - 0.4,
-            { align: "center" }
-        );
-
-        if (i < images.length - 1) {
-            pdf.addPage();
-        }
-    }
-
-    return pdf.output('blob');
-}
-
-// =======================================
-// تنزيل مع تسمية مسبقة
-// =======================================
-async function downloadPDF() {
-    const btn = document.getElementById('download-button');
-    btn.disabled = true;
-
-    try {
-
-        const fileName = prompt("أدخل اسم الملف قبل التنزيل:", "Amazon-KDP-Book");
-
-        if (!fileName) {
-            btn.disabled = false;
-            return;
-        }
-
-        const blob = await generatePDFBlob();
-        const url = URL.createObjectURL(blob);
-
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fileName.endsWith('.pdf') ? fileName : fileName + '.pdf';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-
-        URL.revokeObjectURL(url);
-
-    } catch (e) {
-        alert('فشل إنشاء PDF');
-        console.error(e);
-    } finally {
-        btn.disabled = false;
-    }
-}
-
-// =======================================
-// مشاركة
-// =======================================
-async function sharePDF() {
-    if (!navigator.share) {
-        alert('المتصفح لا يدعم المشاركة');
-        return;
-    }
-
-    const fileName = prompt("أدخل اسم الملف للمشاركة:", "Amazon-KDP-Book") || "Amazon-KDP-Book";
-
-    const blob = await generatePDFBlob();
-    const file = new File([blob], fileName + '.pdf', { type: 'application/pdf' });
-
-    await navigator.share({
-        title: fileName,
-        files: [file]
-    });
-}
-
-// =======================================
-// تشغيل
-// =======================================
-(async () => {
-    await displaySidebar();
-    await displayPages();
-    scrollToPage(0);
-
-    document.getElementById('share-button').addEventListener('click', sharePDF);
-    document.getElementById('download-button').addEventListener('click', downloadPDF);
-})();
-</script>
-
 
 <script>
 const toggleBtn = document.getElementById('toggleBtn');
@@ -606,64 +287,178 @@ let isOpen = false;
 let startX = 0;
 let currentX = 0;
 let dragging = false;
+let sidebarWidth = 0;
+let dragThreshold = 16; // المسافة من اليسار لتفعيل السحب
 
-// فتح وغلق بالسير عبر الزر
-toggleBtn.addEventListener('click', () => {
-    if(isOpen){
-        closeSidebar();
-    } else {
-        openSidebar();
-    }
-});
-
-function openSidebar() {
-    sidebar.classList.add('open'); // استخدم الكلاس للتحريك
-    isOpen = true;
+// تحديث عرض sidebar عند التحميل وتغيير حجم النافذة
+function updateSidebarWidth() {
+    sidebarWidth = sidebar.offsetWidth;
 }
 
-function closeSidebar() {
-    sidebar.classList.remove('open'); // إزالة الكلاس لإخفاء الديف
+window.addEventListener('load', updateSidebarWidth);
+window.addEventListener('resize', updateSidebarWidth);
+
+// ==================== دوال الفتح والإغلاق ====================
+
+function openSidebar(duration = 300) {
+    // تنظيف أي ستايل قديم
+    sidebar.style.transition = '';
+    sidebar.style.left = '';
+
+    // تحديث العرض
+    updateSidebarWidth();
+
+    // تأكيد بداية الحركة من خارج الشاشة
+    sidebar.style.left = -sidebarWidth + 'px';
+
+    // السماح للمتصفح بمعالجة التغيير قبل الانتقال
+    requestAnimationFrame(() => {
+        sidebar.style.transition = `left ${duration}ms ease`;
+        sidebar.style.left = '0';
+        sidebar.classList.add('open');
+        isOpen = true;
+    });
+}
+
+function closeSidebar(duration = 300) {
+    // تنظيف أي ستايل قديم
+    sidebar.style.transition = '';
+    sidebar.style.left = '';
+
+    updateSidebarWidth();
+
+    // تفعيل الانتقال للإغلاق
+    sidebar.style.transition = `left ${duration}ms ease`;
+    sidebar.style.left = -sidebarWidth + 'px';
+    
+    setTimeout(() => {
+        if (!isOpen) {
+            sidebar.classList.remove('open');
+            sidebar.style.transition = '';
+            sidebar.style.left = '';
+        }
+    }, duration);
+
     isOpen = false;
 }
 
-// سحب الديف
-sidebar.addEventListener('mousedown', startDrag);
-sidebar.addEventListener('touchstart', startDrag);
+// ==================== التحكم بالزر ====================
 
-function startDrag(e) {
+toggleBtn.addEventListener('click', () => {
+    if (isOpen) {
+        closeSidebar(300);
+    } else {
+        openSidebar(300);
+    }
+});
+
+// ==================== التحقق من السحب من الحافة ====================
+
+function isDragFromLeftEdge(clientX) {
+    return clientX <= dragThreshold;
+}
+
+// ==================== بدء السحب من الحافة (عندما يكون مغلقاً) ====================
+
+function startDragFromEdge(e) {
     dragging = true;
     startX = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
     currentX = startX;
 
-    document.addEventListener('mousemove', onDrag);
-    document.addEventListener('mouseup', endDrag);
-    document.addEventListener('touchmove', onDrag);
-    document.addEventListener('touchend', endDrag);
+    sidebar.style.transition = 'none';
+    updateSidebarWidth();
+    sidebar.style.left = -sidebarWidth + 'px';
+    sidebar.classList.add('open');
+
+    document.addEventListener('mousemove', onDragFromEdge);
+    document.addEventListener('mouseup', endDragFromEdge);
+    document.addEventListener('touchmove', onDragFromEdge, { passive: false });
+    document.addEventListener('touchend', endDragFromEdge, { passive: false });
+
+    e.preventDefault();
 }
 
-function onDrag(e) {
-    if(!dragging) return;
+function onDragFromEdge(e) {
+    if (!dragging) return;
+    e.preventDefault();
+
     let clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
     let deltaX = clientX - startX;
 
-    // نسمح فقط بالسحب لليسار
-    if(deltaX < 0){
-        sidebar.style.left = Math.max(deltaX, -sidebar.offsetWidth) + 'px';
+    if (deltaX > 0) {
+        let newLeft = Math.min(deltaX - sidebarWidth, 0);
+        sidebar.style.left = newLeft + 'px';
+        currentX = clientX;
+    }
+}
+
+function endDragFromEdge() {
+    if (!dragging) return;
+    dragging = false;
+
+    let moved = currentX - startX;
+
+    if (moved > 30) {
+        // فتح السايد بار
+        openSidebar(300);
+    } else {
+        // إغلاقه مرة أخرى
+        closeSidebar(300);
+    }
+
+    document.removeEventListener('mousemove', onDragFromEdge);
+    document.removeEventListener('mouseup', endDragFromEdge);
+    document.removeEventListener('touchmove', onDragFromEdge);
+    document.removeEventListener('touchend', endDragFromEdge);
+}
+
+// ==================== السحب العادي (عندما يكون مفتوحاً) ====================
+
+function startDrag(e) {
+    if (isOpen) {
+        dragging = true;
+        startX = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
+        currentX = startX;
+
+        sidebar.style.transition = 'none';
+        updateSidebarWidth();
+
+        document.addEventListener('mousemove', onDrag);
+        document.addEventListener('mouseup', endDrag);
+        document.addEventListener('touchmove', onDrag, { passive: false });
+        document.addEventListener('touchend', endDrag, { passive: false });
+
+        e.preventDefault();
+    }
+}
+
+function onDrag(e) {
+    if (!dragging) return;
+    e.preventDefault();
+
+    let clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+    let deltaX = clientX - startX;
+
+    if (isOpen && deltaX < 0) {
+        let newLeft = Math.max(deltaX, -sidebarWidth);
+        sidebar.style.left = newLeft + 'px';
         currentX = clientX;
     }
 }
 
 function endDrag() {
+    if (!dragging) return;
     dragging = false;
-    let moved = startX - currentX;
-    if(moved > sidebar.offsetWidth / 2){
-        closeSidebar();
-    } else {
-        openSidebar();
-    }
 
-    // إعادة ضبط الـstyle بعد السحب للتوافق مع CSS
-    sidebar.style.left = '';
+    let moved = currentX - startX;
+
+    if (isOpen) {
+        if (moved < -30) {
+            closeSidebar(300);
+        } else {
+            openSidebar(300);
+        }
+    }
 
     document.removeEventListener('mousemove', onDrag);
     document.removeEventListener('mouseup', endDrag);
@@ -671,10 +466,48 @@ function endDrag() {
     document.removeEventListener('touchend', endDrag);
 }
 
+// ==================== إضافة مستمعي الأحداث ====================
+
+// سحب من السايد بار نفسه عندما يكون مفتوحاً
+sidebar.addEventListener('mousedown', startDrag);
+sidebar.addEventListener('touchstart', startDrag, { passive: false });
+
+// سحب من الحافة اليسرى عندما يكون مغلقاً
+document.addEventListener('mousedown', (e) => {
+    if (!isOpen && isDragFromLeftEdge(e.clientX)) {
+        startDragFromEdge(e);
+    }
+});
+
+document.addEventListener('touchstart', (e) => {
+    if (!isOpen && isDragFromLeftEdge(e.touches[0].clientX)) {
+        startDragFromEdge(e);
+    }
+}, { passive: false });
+
+// ==================== إغلاق عند النقر خارج السايد بار ====================
+
+document.addEventListener('click', (e) => {
+    if (isOpen && !sidebar.contains(e.target) && e.target !== toggleBtn) {
+        closeSidebar(500);
+    }
+});
+
+document.addEventListener('touchstart', (e) => {
+    if (isOpen && !sidebar.contains(e.target) && e.target !== toggleBtn) {
+        closeSidebar(500);
+    }
+}, { passive: false });
+
+// ==================== تهيئة الحالة الابتدائية ====================
+
 // عند تحميل الصفحة، إخفاء الديف
-closeSidebar();
+setTimeout(() => {
+    closeSidebar(0); // بدون حركة عند التحميل
+}, 100);
 </script>
 
+<script src="viewer.js"></script>
 
 </body>
 </html>
