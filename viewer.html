@@ -199,6 +199,8 @@ button {
 }
 
 .menu .flexe button {
+    position: relative;
+    overflow: hidden;
     width: 36px;
     height: 36px;
     border: none;
@@ -213,6 +215,15 @@ button {
 .menu .flexe button:disabled {
     opacity: 0.5;
     pointer-events: none;
+}
+.menu .flexe button::before {
+    position: absolute;
+    z-index: 4;
+    content: '';
+    width: 100%;
+    height: 100%;
+    left: 0;
+    top: 0;
 }
 
 
@@ -288,7 +299,7 @@ let startX = 0;
 let currentX = 0;
 let dragging = false;
 let sidebarWidth = 0;
-let dragThreshold = 16; // المسافة من اليسار لتفعيل السحب
+let dragThreshold = 0; // المسافة من اليسار لتفعيل السحب
 
 // تحديث عرض sidebar عند التحميل وتغيير حجم النافذة
 function updateSidebarWidth() {
@@ -360,7 +371,35 @@ function isDragFromLeftEdge(clientX) {
 
 // ==================== بدء السحب من الحافة (عندما يكون مغلقاً) ====================
 
+// ==================== السحب العادي (عندما يكون مفتوحاً) ====================
+
+function startDrag(e) {
+    // إذا كان الهدف داخل عناصر sidebar الداخلية، نمنع السحب
+    if (e.target !== sidebar && sidebar.contains(e.target)) return;
+
+    if (isOpen) {
+        dragging = true;
+        startX = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
+        currentX = startX;
+
+        sidebar.style.transition = 'none';
+        updateSidebarWidth();
+
+        document.addEventListener('mousemove', onDrag);
+        document.addEventListener('mouseup', endDrag);
+        document.addEventListener('touchmove', onDrag, { passive: false });
+        document.addEventListener('touchend', endDrag, { passive: false });
+
+        e.preventDefault();
+    }
+}
+
+// ==================== سحب من الحافة (عند مغلق) ====================
+
 function startDragFromEdge(e) {
+    // فقط إذا بدأ السحب من الحافة اليسرى وليس من داخل sidebar
+    if (sidebar.contains(e.target)) return;
+
     dragging = true;
     startX = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
     currentX = startX;
@@ -415,6 +454,9 @@ function endDragFromEdge() {
 // ==================== السحب العادي (عندما يكون مفتوحاً) ====================
 
 function startDrag(e) {
+    // إذا كان الهدف داخل عناصر sidebar الداخلية، نمنع السحب
+    if (e.target !== sidebar && sidebar.contains(e.target)) return;
+
     if (isOpen) {
         dragging = true;
         startX = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
