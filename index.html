@@ -159,6 +159,9 @@ button {
         width: 122px;
         height: 140px;
     }
+    #drop-area {
+        height: 50px;
+    }
 }
 </style>
 </head>
@@ -302,6 +305,9 @@ function displayGallery() {
         const img = document.createElement('img');
         img.src = src;
         img.draggable = false;
+
+        // منع قائمة النقر يمين على الصورة
+        img.addEventListener('contextmenu', (e) => e.preventDefault());
 
         const label = document.createElement('span');
         label.textContent = index + 1;
