@@ -146,9 +146,13 @@ button {
     background-color: #3284ff;
 }
 
+.thumb {
+    touch-action: none;
+}
+
 
 @media (max-width: 500px) {
-    button,div,a {
+    button,div,a,img {
         cursor: context-menu !important;
     }
     .thumb {
@@ -186,6 +190,11 @@ let dragIndex = null;
 // عناصر شريط التحميل
 const progressContainer = document.getElementById('progress-container');
 const progressBar = document.getElementById('progress-bar');
+
+// إعدادات السكرول التلقائي
+const scrollEdge = 80;      // المسافة من أعلى/أسفل لتفعيل السكرول
+const scrollSpeed = 15;     // سرعة السكرول
+let autoScrollInterval = null;
 
 // Open file selector on click
 dropArea.addEventListener('click', () => fileElem.click());
@@ -226,7 +235,7 @@ function readFileAsDataURL(file, onProgress) {
             progressBar.style.width = '100%';
             setTimeout(() => {
                 progressContainer.style.display = 'none';
-            }, 300); // اختفاء تدريجي بعد اكتمال التحميل
+            }, 300);
             resolve(e.target.result);
         };
 
@@ -254,7 +263,33 @@ function removeAllDragOver() {
         .forEach(el => el.classList.remove('drag-over'));
 }
 
-// عرض الصور + إعادة الترتيب بالسحب
+// التحكم في السكرول التلقائي
+function handleAutoScroll(touchY) {
+    const viewportHeight = window.innerHeight;
+
+    if (touchY < scrollEdge) {
+        startAutoScroll(-scrollSpeed);
+    } else if (touchY > viewportHeight - scrollEdge) {
+        startAutoScroll(scrollSpeed);
+    } else {
+        stopAutoScroll();
+    }
+}
+
+function startAutoScroll(speed) {
+    if (autoScrollInterval) return;
+
+    autoScrollInterval = setInterval(() => {
+        window.scrollBy(0, speed);
+    }, 16); // ~60fps
+}
+
+function stopAutoScroll() {
+    clearInterval(autoScrollInterval);
+    autoScrollInterval = null;
+}
+
+// عرض الصور + إعادة الترتيب بالسحب (ماوس + لمس)
 function displayGallery() {
     gallery.innerHTML = '';
 
@@ -276,7 +311,9 @@ function displayGallery() {
         wrapper.appendChild(label);
         gallery.appendChild(wrapper);
 
-        // Drag Events
+        // ======================
+        // Drag بالماوس
+        // ======================
         wrapper.addEventListener('dragstart', () => {
             dragIndex = index;
             wrapper.classList.add('dragging');
@@ -305,6 +342,67 @@ function displayGallery() {
 
             dragIndex = null;
             displayGallery();
+        });
+
+        // ======================
+        // Drag باللمس + Auto Scroll
+        // ======================
+        wrapper.addEventListener('touchstart', () => {
+            dragIndex = index;
+            wrapper.classList.add('dragging');
+        }, { passive: true });
+
+        wrapper.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+
+            const touch = e.touches[0];
+
+            // تفعيل السكرول التلقائي
+            handleAutoScroll(touch.clientY);
+
+            const element = document.elementFromPoint(touch.clientX, touch.clientY);
+            if (!element) return;
+
+            const target = element.closest('.thumb');
+            if (!target) return;
+
+            const overIndex = Number(target.dataset.index);
+            if (overIndex === dragIndex) return;
+
+            removeAllDragOver();
+            target.classList.add('drag-over');
+
+        }, { passive: false });
+
+        wrapper.addEventListener('touchend', (e) => {
+            stopAutoScroll();
+
+            const touch = e.changedTouches[0];
+            const element = document.elementFromPoint(touch.clientX, touch.clientY);
+
+            wrapper.classList.remove('dragging');
+            removeAllDragOver();
+
+            if (!element) {
+                dragIndex = null;
+                return;
+            }
+
+            const target = element.closest('.thumb');
+            if (!target) {
+                dragIndex = null;
+                return;
+            }
+
+            const dropIndex = Number(target.dataset.index);
+
+            if (dragIndex !== null && dragIndex !== dropIndex) {
+                const movedItem = images.splice(dragIndex, 1)[0];
+                images.splice(dropIndex, 0, movedItem);
+                displayGallery();
+            }
+
+            dragIndex = null;
         });
     });
 }
