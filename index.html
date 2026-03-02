@@ -15,6 +15,7 @@ body {
     text-align: center;
     padding: 20px;
     user-select: none;
+    text-align: -webkit-center;
 }
 
 img {
@@ -61,11 +62,35 @@ button {
 }
 
 #gallery img {
-    width: 100px;
-    height: 100px;
+    position: relative;
     object-fit: cover;
+    width: 100%;
+    height: 100%;
+    display: block;
     cursor: pointer;
+}
+.thumb {
+    transition: ease 0.2s;
+    position: relative;
+    width: 150px;
+    height: 150px;
     border: 1px solid #ccc;
+}
+
+.img-number {
+    position: absolute;
+    background-color: rgba(255, 255, 255, 0.548);
+    top: 0;
+    left: 0;
+    z-index: 4;
+    margin: 5px;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 30px;
+    box-shadow: 0px 1px 4px #0000003b;
 }
 
 button {
@@ -77,9 +102,56 @@ button {
     background: white;
     box-shadow: 0px 3px 7px #55647a61;
 }
+
+.thumb {
+    position: relative;
+    display: inline-block;
+    margin: 5px;
+    cursor: grab;
+}
+
+.thumb.dragging {
+    opacity: 0.4;
+    transform: scale(0.95);
+}
+
+.thumb.drag-over {
+    outline: 3px solid #8bb4ff;
+    outline-offset: 4px;
+    transform: scale(1.05);
+    background: rgba(76, 175, 80, 0.08);
+    transition: 0.15s;
+}
+
+#progress-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 4px;
+    background: #eee;
+    border-radius: 10px;
+    overflow: hidden;
+    display: none; /* يظهر عند التحميل فقط */
+    z-index: 1000;
+}
+
+#progress-bar {
+    position: absolute;
+    left: 0;
+    transition: ease 0.4s;
+    display: block;
+    height: 100%;
+    width: 0%;
+    background-color: #3284ff;
+}
 </style>
 </head>
 <body>
+
+    <div id="progress-container">
+        <span id="progress-bar"></span>
+    </div>
 
     <div class="logo"><img src="Image/logo.png" alt=""></div>
 
@@ -98,6 +170,11 @@ const dropArea = document.getElementById('drop-area');
 const fileElem = document.getElementById('fileElem');
 const gallery = document.getElementById('gallery');
 let images = [];
+let dragIndex = null;
+
+// عناصر شريط التحميل
+const progressContainer = document.getElementById('progress-container');
+const progressBar = document.getElementById('progress-bar');
 
 // Open file selector on click
 dropArea.addEventListener('click', () => fileElem.click());
@@ -105,7 +182,7 @@ dropArea.addEventListener('click', () => fileElem.click());
 // Handle file selection
 fileElem.addEventListener('change', (e) => handleFiles(e.target.files));
 
-// Drag & drop events
+// Drag & drop upload
 dropArea.addEventListener('dragover', (e) => {
     e.preventDefault();
     dropArea.classList.add('hover');
@@ -117,35 +194,117 @@ dropArea.addEventListener('drop', (e) => {
     handleFiles(e.dataTransfer.files);
 });
 
-// Process files
-function handleFiles(files) {
-    for (let file of files) {
-        if (!file.type.startsWith('image/')) continue;
+// قراءة الملفات مع عرض شريط التحميل
+function readFileAsDataURL(file, onProgress) {
+    return new Promise((resolve) => {
         const reader = new FileReader();
-        reader.onload = (e) => {
-            images.push(e.target.result);
-            displayGallery();
-        };
-        reader.readAsDataURL(file);
-    }
-}
 
-// Display thumbnails
-function displayGallery() {
-    gallery.innerHTML = '';
-    images.forEach((src, index) => {
-        const img = document.createElement('img');
-        img.src = src;
-        gallery.appendChild(img);
+        reader.onprogress = (e) => {
+            if (e.lengthComputable) {
+                const percent = (e.loaded / e.total) * 100;
+                onProgress(percent);
+            }
+        };
+
+        reader.onloadstart = () => {
+            progressContainer.style.display = 'block';
+            progressBar.style.width = '0%';
+        };
+
+        reader.onload = (e) => {
+            progressBar.style.width = '100%';
+            setTimeout(() => {
+                progressContainer.style.display = 'none';
+            }, 300); // اختفاء تدريجي بعد اكتمال التحميل
+            resolve(e.target.result);
+        };
+
+        reader.readAsDataURL(file);
     });
 }
 
-// Go to viewer page and save images in localStorage
+// Process files
+async function handleFiles(files) {
+    const fileArray = Array.from(files).filter(file => file.type.startsWith('image/'));
+
+    for (let i = 0; i < fileArray.length; i++) {
+        const dataURL = await readFileAsDataURL(fileArray[i], (percent) => {
+            progressBar.style.width = percent + '%';
+        });
+        images.push(dataURL);
+    }
+
+    displayGallery();
+}
+
+// إزالة تأثير hover من جميع الصور
+function removeAllDragOver() {
+    document.querySelectorAll('.thumb.drag-over')
+        .forEach(el => el.classList.remove('drag-over'));
+}
+
+// عرض الصور + إعادة الترتيب بالسحب
+function displayGallery() {
+    gallery.innerHTML = '';
+
+    images.forEach((src, index) => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'thumb';
+        wrapper.draggable = true;
+        wrapper.dataset.index = index;
+
+        const img = document.createElement('img');
+        img.src = src;
+        img.draggable = false;
+
+        const label = document.createElement('span');
+        label.textContent = index + 1;
+        label.className = 'img-number';
+
+        wrapper.appendChild(img);
+        wrapper.appendChild(label);
+        gallery.appendChild(wrapper);
+
+        // Drag Events
+        wrapper.addEventListener('dragstart', () => {
+            dragIndex = index;
+            wrapper.classList.add('dragging');
+        });
+
+        wrapper.addEventListener('dragend', () => {
+            wrapper.classList.remove('dragging');
+            removeAllDragOver();
+        });
+
+        wrapper.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            if (dragIndex === index) return;
+            removeAllDragOver();
+            wrapper.classList.add('drag-over');
+        });
+
+        wrapper.addEventListener('dragleave', () => wrapper.classList.remove('drag-over'));
+
+        wrapper.addEventListener('drop', () => {
+            const dropIndex = index;
+            if (dragIndex === null || dragIndex === dropIndex) return;
+
+            const movedItem = images.splice(dragIndex, 1)[0];
+            images.splice(dropIndex, 0, movedItem);
+
+            dragIndex = null;
+            displayGallery();
+        });
+    });
+}
+
+// إرسال الصور للصفحة الأخرى بالترتيب
 document.getElementById('viewBtn').addEventListener('click', () => {
     if (images.length === 0) {
         alert('Please upload images first');
         return;
     }
+
     localStorage.setItem('pdfImages', JSON.stringify(images));
     window.location.href = 'viewer.html';
 });
