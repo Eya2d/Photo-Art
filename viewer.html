@@ -189,6 +189,11 @@ button {
     color: #5197ff;
     margin: 0 2px;
 }
+.logo button {
+    display: none;
+    margin-right: 8px;
+    margin-left: 0 !important;
+}
 
 .menu .flexe button {
     width: 36px;
@@ -206,12 +211,42 @@ button {
     opacity: 0.5;
     pointer-events: none;
 }
+
+
+
+@media (max-width: 500px) {
+    button,div,a {
+        cursor: context-menu !important;
+    }
+    body #sidebar {
+        position: fixed;
+        z-index: 100;
+        margin-top: 56px;
+        top: 0;
+        bottom: 0;
+        box-shadow: 2px 0px 30px #b6c3cfb8;
+        width: 250px;
+    }
+    .menu {
+        z-index: 110 !important;
+    }
+    .logo button {
+        display: flex;
+    }
+    body .page-container {
+        width: 100%;
+        height: 100%;
+    }
+}
 </style>
 </head>
 <body>
 
 <div class="menu">
-    <div class="logo"><img src="Image/logo.png" alt=""> Photo Art ( <span title="Display version">View</span> )</div>
+    <div class="logo flexe Wave-all-center">
+        <button id="Open-menu"><ion-icon name="menu-outline"></ion-icon></button>
+        <img src="Image/logo.png" alt=""> Photo Art ( <span title="Display version">View</span> )
+    </div>
 
     <div class="flexe Wave-all-center">
         <!-- تم إضافة id لتحديد الأزرار -->
