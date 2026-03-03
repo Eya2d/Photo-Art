@@ -399,7 +399,7 @@ function getImportantPages(currentIndex, fast = false) {
 }
 
 // =======================================
-// دالة جديدة: تفريغ الصفحات البعيدة
+// دالة جديدة: تفريغ الصفحات البعيدة (معدلة)
 // =======================================
 function unloadDistantPages(centerIndex) {
     // ✅ نحتفظ فقط بـ: الصفحة السابقة، الحالية، والتالية
@@ -408,7 +408,7 @@ function unloadDistantPages(centerIndex) {
     if (centerIndex - 1 >= 0) pagesToKeep.add(centerIndex - 1);
     if (centerIndex + 1 < images.length) pagesToKeep.add(centerIndex + 1);
     
-    // تفريغ أي صفحة ليست في المجموعة
+    // تفريغ فقط الصفحات المحملة فعلياً والتي ليست في مجموعة الاحتفاظ
     loadedPages.forEach((index) => {
         if (!pagesToKeep.has(index)) {
             const container = pageContainers[index];
@@ -464,7 +464,7 @@ function handleScroll() {
             }
         });
         
-        // ✅ تفريغ الصفحات البعيدة (أي صفحة ليست قبل/بعد الصفحة الحالية)
+        // ✅ تفريغ فقط الصفحات المحملة والتي أصبحت بعيدة
         unloadDistantPages(centerIndex);
         
         // إذا كان التمرير بطيئاً، نحمّل فوراً
