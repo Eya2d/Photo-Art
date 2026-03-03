@@ -563,44 +563,29 @@ function scrollToPage(index) {
     const container = pageContainers[index];
     if (!container) return;
 
+    // إلغاء أي مؤقتات تمرير
     clearTimeout(scrollTimeout);
     clearTimeout(touchEndTimeout);
 
+    // منع نظام التمرير من العمل أثناء الانتقال
     isScrolling = true;
     isTouching = false;
 
-    updateSidebarActive(index);
+    // ❌ لا نقوم بتحميل الصورة هنا إطلاقاً
+    // سيتم تحميلها تلقائياً عند توقف التمرير
 
     container.scrollIntoView({
         behavior: 'smooth',
         block: 'start'
     });
 
-    // 🔥 مراقبة انتهاء التمرير فعلياً
-    let lastPosition = -1;
-    let stableFrames = 0;
+    updateSidebarActive(index);
 
-    function detectScrollStop() {
-        const currentPosition = pageView.scrollTop;
-
-        if (Math.abs(currentPosition - lastPosition) < 2) {
-            stableFrames++;
-        } else {
-            stableFrames = 0;
-        }
-
-        lastPosition = currentPosition;
-
-        // إذا ثبتت القيمة عدة فريمات = التمرير انتهى فعلياً
-        if (stableFrames > 5) {
-            isScrolling = false;
-            handleScrollEnd(); // تحميل الصفحة المركزية فقط
-        } else {
-            requestAnimationFrame(detectScrollStop);
-        }
-    }
-
-    requestAnimationFrame(detectScrollStop);
+    // بعد انتهاء التمرير نسمح للنظام بتحميل الصفحة
+    setTimeout(() => {
+        isScrolling = false;
+        handleScrollEnd(); // هذا سيحمّل الصفحة المركزية فقط
+    }, 400);
 }
 
 // =======================================
