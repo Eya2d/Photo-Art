@@ -3,7 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <link rel="icon" href="Image/logo.png">
 <title>View file - PDF viewer with share & download</title>
 <!-- Ionicons -->
@@ -427,6 +426,9 @@ button {
     pointer-events: none;
 }
 
+#sidebar {
+    -webkit-overflow-scrolling: touch;
+}
 
 </style>
 </head>
@@ -467,16 +469,23 @@ button {
 
 
 <script>
+const sidebar = document.getElementById('sidebar');
 const toggleBtn = document.getElementById('toggleBtn');
 
 let isOpen = false;
 let startX = 0;
+let startY = 0;
 let currentX = 0;
 let dragging = false;
 let sidebarWidth = 0;
-let dragThreshold = 0; // المسافة من اليسار لتفعيل السحب
+let dragThreshold = 0;
 
-// تحديث عرض sidebar عند التحميل وتغيير حجم النافذة
+let isVerticalDrag = false;
+let isHorizontalDrag = false;
+let startScrollTop = 0;
+
+// ==================== تحديث العرض ====================
+
 function updateSidebarWidth() {
     sidebarWidth = sidebar.offsetWidth;
 }
@@ -484,20 +493,16 @@ function updateSidebarWidth() {
 window.addEventListener('load', updateSidebarWidth);
 window.addEventListener('resize', updateSidebarWidth);
 
-// ==================== دوال الفتح والإغلاق ====================
+// ==================== فتح وإغلاق ====================
 
 function openSidebar(duration = 300) {
-    // تنظيف أي ستايل قديم
     sidebar.style.transition = '';
     sidebar.style.left = '';
 
-    // تحديث العرض
     updateSidebarWidth();
 
-    // تأكيد بداية الحركة من خارج الشاشة
     sidebar.style.left = -sidebarWidth + 'px';
 
-    // السماح للمتصفح بمعالجة التغيير قبل الانتقال
     requestAnimationFrame(() => {
         sidebar.style.transition = `left ${duration}ms ease`;
         sidebar.style.left = '0';
@@ -507,16 +512,14 @@ function openSidebar(duration = 300) {
 }
 
 function closeSidebar(duration = 300) {
-    // تنظيف أي ستايل قديم
     sidebar.style.transition = '';
     sidebar.style.left = '';
 
     updateSidebarWidth();
 
-    // تفعيل الانتقال للإغلاق
     sidebar.style.transition = `left ${duration}ms ease`;
     sidebar.style.left = -sidebarWidth + 'px';
-    
+
     setTimeout(() => {
         if (!isOpen) {
             sidebar.classList.remove('open');
@@ -528,34 +531,53 @@ function closeSidebar(duration = 300) {
     isOpen = false;
 }
 
-// ==================== التحكم بالزر ====================
+// ==================== زر التبديل ====================
 
 toggleBtn.addEventListener('click', () => {
-    if (isOpen) {
-        closeSidebar(300);
-    } else {
-        openSidebar(300);
-    }
+    isOpen ? closeSidebar(300) : openSidebar(300);
 });
 
-// ==================== التحقق من السحب من الحافة ====================
+// ==================== تحقق من الحافة ====================
 
 function isDragFromLeftEdge(clientX) {
     return clientX <= dragThreshold;
 }
 
-// ==================== بدء السحب من الحافة (عندما يكون مغلقاً) ====================
-
-// ==================== السحب العادي (عندما يكون مفتوحاً) ====================
+// ==================== بدء السحب ====================
 
 function startDrag(e) {
-    // إذا كان الهدف داخل عناصر sidebar الداخلية، نمنع السحب
-    if (e.target !== sidebar && sidebar.contains(e.target)) return;
+    const isTouch = e.type.includes('touch');
+    const clientX = isTouch ? e.touches[0].clientX : e.clientX;
+    const clientY = isTouch ? e.touches[0].clientY : e.clientY;
 
-    if (isOpen) {
+    // سحب من الحافة عند الإغلاق
+    if (!isOpen && isDragFromLeftEdge(clientX)) {
         dragging = true;
-        startX = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
-        currentX = startX;
+        startX = clientX;
+        currentX = clientX;
+
+        sidebar.style.transition = 'none';
+        updateSidebarWidth();
+        sidebar.style.left = -sidebarWidth + 'px';
+        sidebar.classList.add('open');
+
+        document.addEventListener('mousemove', onDragFromEdge);
+        document.addEventListener('mouseup', endDragFromEdge);
+        document.addEventListener('touchmove', onDragFromEdge, { passive: false });
+        document.addEventListener('touchend', endDragFromEdge);
+        return;
+    }
+
+    // عند الفتح
+    if (isOpen && sidebar.contains(e.target)) {
+        dragging = true;
+        startX = clientX;
+        startY = clientY;
+        currentX = clientX;
+        startScrollTop = sidebar.scrollTop;
+
+        isVerticalDrag = false;
+        isHorizontalDrag = false;
 
         sidebar.style.transition = 'none';
         updateSidebarWidth();
@@ -563,40 +585,16 @@ function startDrag(e) {
         document.addEventListener('mousemove', onDrag);
         document.addEventListener('mouseup', endDrag);
         document.addEventListener('touchmove', onDrag, { passive: false });
-        document.addEventListener('touchend', endDrag, { passive: false });
-
-        e.preventDefault();
+        document.addEventListener('touchend', endDrag);
     }
 }
 
-// ==================== سحب من الحافة (عند مغلق) ====================
-
-function startDragFromEdge(e) {
-    // فقط إذا بدأ السحب من الحافة اليسرى وليس من داخل sidebar
-    if (sidebar.contains(e.target)) return;
-
-    dragging = true;
-    startX = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
-    currentX = startX;
-
-    sidebar.style.transition = 'none';
-    updateSidebarWidth();
-    sidebar.style.left = -sidebarWidth + 'px';
-    sidebar.classList.add('open');
-
-    document.addEventListener('mousemove', onDragFromEdge);
-    document.addEventListener('mouseup', endDragFromEdge);
-    document.addEventListener('touchmove', onDragFromEdge, { passive: false });
-    document.addEventListener('touchend', endDragFromEdge, { passive: false });
-
-    e.preventDefault();
-}
+// ==================== سحب من الحافة ====================
 
 function onDragFromEdge(e) {
     if (!dragging) return;
-    e.preventDefault();
 
-    let clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+    const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
     let deltaX = clientX - startX;
 
     if (deltaX > 0) {
@@ -611,14 +609,7 @@ function endDragFromEdge() {
     dragging = false;
 
     let moved = currentX - startX;
-
-    if (moved > 30) {
-        // فتح السايد بار
-        openSidebar(300);
-    } else {
-        // إغلاقه مرة أخرى
-        closeSidebar(300);
-    }
+    moved > 30 ? openSidebar(300) : closeSidebar(300);
 
     document.removeEventListener('mousemove', onDragFromEdge);
     document.removeEventListener('mouseup', endDragFromEdge);
@@ -626,37 +617,36 @@ function endDragFromEdge() {
     document.removeEventListener('touchend', endDragFromEdge);
 }
 
-// ==================== السحب العادي (عندما يكون مفتوحاً) ====================
-
-function startDrag(e) {
-    // إذا كان الهدف داخل عناصر sidebar الداخلية، نمنع السحب
-    if (e.target !== sidebar && sidebar.contains(e.target)) return;
-
-    if (isOpen) {
-        dragging = true;
-        startX = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
-        currentX = startX;
-
-        sidebar.style.transition = 'none';
-        updateSidebarWidth();
-
-        document.addEventListener('mousemove', onDrag);
-        document.addEventListener('mouseup', endDrag);
-        document.addEventListener('touchmove', onDrag, { passive: false });
-        document.addEventListener('touchend', endDrag, { passive: false });
-
-        e.preventDefault();
-    }
-}
+// ==================== سحب عند الفتح ====================
 
 function onDrag(e) {
     if (!dragging) return;
-    e.preventDefault();
 
-    let clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
-    let deltaX = clientX - startX;
+    const isTouch = e.type.includes('touch');
+    const clientX = isTouch ? e.touches[0].clientX : e.clientX;
+    const clientY = isTouch ? e.touches[0].clientY : e.clientY;
 
-    if (isOpen && deltaX < 0) {
+    const deltaX = clientX - startX;
+    const deltaY = clientY - startY;
+
+    // تحديد الاتجاه أول مرة
+    if (!isVerticalDrag && !isHorizontalDrag) {
+        if (Math.abs(deltaY) > Math.abs(deltaX)) {
+            isVerticalDrag = true;
+        } else {
+            isHorizontalDrag = true;
+        }
+    }
+
+    // ================= سكرول عمودي =================
+    if (isVerticalDrag) {
+        e.preventDefault();
+        sidebar.scrollTop = startScrollTop - deltaY;
+    }
+
+    // ================= سحب أفقي =================
+    if (isHorizontalDrag && deltaX < 0) {
+        e.preventDefault();
         let newLeft = Math.max(deltaX, -sidebarWidth);
         sidebar.style.left = newLeft + 'px';
         currentX = clientX;
@@ -669,13 +659,12 @@ function endDrag() {
 
     let moved = currentX - startX;
 
-    if (isOpen) {
-        if (moved < -30) {
-            closeSidebar(300);
-        } else {
-            openSidebar(300);
-        }
+    if (isHorizontalDrag) {
+        moved < -30 ? closeSidebar(300) : openSidebar(300);
     }
+
+    isVerticalDrag = false;
+    isHorizontalDrag = false;
 
     document.removeEventListener('mousemove', onDrag);
     document.removeEventListener('mouseup', endDrag);
@@ -683,27 +672,12 @@ function endDrag() {
     document.removeEventListener('touchend', endDrag);
 }
 
-// ==================== إضافة مستمعي الأحداث ====================
+// ==================== إضافة المستمعين ====================
 
-// سحب من السايد بار نفسه عندما يكون مفتوحاً
-sidebar.addEventListener('mousedown', startDrag);
-sidebar.addEventListener('touchstart', startDrag, { passive: false });
+document.addEventListener('mousedown', startDrag);
+document.addEventListener('touchstart', startDrag, { passive: false });
 
-// سحب من الحافة اليسرى عندما يكون مغلقاً
-document.addEventListener('mousedown', (e) => {
-    if (!isOpen && isDragFromLeftEdge(e.clientX)) {
-        startDragFromEdge(e);
-    }
-});
-
-document.addEventListener('touchstart', (e) => {
-    if (!isOpen && isDragFromLeftEdge(e.touches[0].clientX)) {
-        startDragFromEdge(e);
-    }
-}, { passive: false });
-
-// ==================== إغلاق عند النقر خارج السايد بار ====================
-
+// إغلاق عند الضغط خارج السايد بار
 document.addEventListener('click', (e) => {
     if (isOpen && !sidebar.contains(e.target) && e.target !== toggleBtn) {
         closeSidebar(500);
@@ -716,11 +690,10 @@ document.addEventListener('touchstart', (e) => {
     }
 }, { passive: false });
 
-// ==================== تهيئة الحالة الابتدائية ====================
+// ==================== الحالة الابتدائية ====================
 
-// عند تحميل الصفحة، إخفاء الديف
 setTimeout(() => {
-    closeSidebar(0); // بدون حركة عند التحميل
+    closeSidebar(0);
 }, 100);
 </script>
 
