@@ -21,21 +21,19 @@ const progressText = document.getElementById('progress-text');
 let stopPDFGeneration = false;
 let isGeneratingPDF = false;
 
-// =======================================
-// متغيرات جديدة للتحكم في التحميل الذكي
-// =======================================
+// متغيرات للتحكم في التحميل الديناميكي
 let loadedPages = new Set();
 let canvasReferences = new Map();
-const PRELOAD_RANGE = 1; // ✅ صفحة واحدة قبل وواحدة بعد فقط
+let currentVisiblePage = -1; // تتبع الصفحة الحالية المرئية
 
 // متغيرات للتحكم في التمرير السريع
-let scrollTimeout = null;
-let lastScrollPosition = 0;
+let isScrolling = false;
+let scrollTimeout;
+let touchEndTimeout;
+let isTouching = false;
+let lastScrollTop = 0;
 let scrollDirection = 'down';
-let pendingLoadIndices = new Set();
-let isScrollingFast = false;
-const SCROLL_THRESHOLD = 500; // المسافة بالبكسل للكشف عن التمرير السريع
-const LOAD_DELAY = 150; // تأخير التحميل بالمللي ثانية
+let fastScrollCount = 0;
 
 // متغير للتخزين المؤقت للـ PDF
 let cachedPDFBlob = null;
@@ -243,7 +241,7 @@ async function displaySidebar() {
 }
 
 // =======================================
-// تحميل صورة في Canvas
+// تحميل صورة في Canvas (معدلة لإزالة الصورة السابقة)
 // =======================================
 function loadImageIntoCanvas(canvas, imageSrc, index) {
     return new Promise((resolve) => {
@@ -252,6 +250,9 @@ function loadImageIntoCanvas(canvas, imageSrc, index) {
         const image = new Image();
         image.src = imageSrc;
         image.onload = () => {
+            // إزالة الصورة السابقة أولاً
+            unloadPreviousPage(index);
+            
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
             if (isImageWhite(image)) {
@@ -270,10 +271,25 @@ function loadImageIntoCanvas(canvas, imageSrc, index) {
             
             loadedPages.add(index);
             canvasReferences.set(index, image);
+            currentVisiblePage = index; // تحديث الصفحة الحالية
             
             resolve();
         };
     });
+}
+
+// =======================================
+// إزالة الصفحة السابقة (دالة جديدة)
+// =======================================
+function unloadPreviousPage(newPageIndex) {
+    if (currentVisiblePage !== -1 && currentVisiblePage !== newPageIndex) {
+        const previousContainer = pageContainers[currentVisiblePage];
+        if (previousContainer) {
+            const previousCanvas = previousContainer.querySelector('canvas');
+            unloadImageFromCanvas(previousCanvas, currentVisiblePage);
+            console.log(`تم إزالة الصفحة ${currentVisiblePage + 1} من DOM`);
+        }
+    }
 }
 
 // =======================================
@@ -294,6 +310,7 @@ async function displayPages() {
     pageContainers = [];
     loadedPages.clear();
     canvasReferences.clear();
+    currentVisiblePage = -1; // إعادة تعيين الصفحة الحالية
 
     for (let index = 0; index < images.length; index++) {
         const container = document.createElement('div');
@@ -314,7 +331,6 @@ async function displayPages() {
         pageContainers.push(container);
     }
 
-    // تحميل الصفحة الأولى فقط في البداية
     if (images.length > 0) {
         await loadImageIntoCanvas(pageContainers[0].querySelector('canvas'), images[0], 0);
     }
@@ -351,143 +367,137 @@ function isImageWhite(img) {
 }
 
 // =======================================
-// دالة جديدة: تحميل الصفحات المعلقة
-// =======================================
-function loadPendingPages() {
-    if (pendingLoadIndices.size === 0) return;
-    
-    // تحويل الـ Set إلى مصفوفة وترتيبها
-    const indicesToLoad = Array.from(pendingLoadIndices).sort((a, b) => a - b);
-    
-    // تحميل كل صفحة معلقة
-    indicesToLoad.forEach(index => {
-        if (!loadedPages.has(index)) {
-            const container = pageContainers[index];
-            const canvas = container.querySelector('canvas');
-            loadImageIntoCanvas(canvas, images[index], index);
-        }
-    });
-    
-    // مسح الصفحات المعلقة
-    pendingLoadIndices.clear();
-}
-
-// =======================================
-// دالة جديدة: تحديد الصفحات المهمة للتحميل (صفحة واحدة فقط)
-// =======================================
-function getImportantPages(currentIndex, fast = false) {
-    const importantPages = new Set();
-    
-    if (fast) {
-        // في حالة التمرير السريع، نحمّل فقط الصفحة الحالية
-        importantPages.add(currentIndex);
-    } else {
-        // في حالة التمرير البطيء، نحمّل صفحة قبل وبعد
-        // ✅ صفحة واحدة قبل
-        if (currentIndex - 1 >= 0) {
-            importantPages.add(currentIndex - 1);
-        }
-        // ✅ الصفحة الحالية
-        importantPages.add(currentIndex);
-        // ✅ صفحة واحدة بعد
-        if (currentIndex + 1 < images.length) {
-            importantPages.add(currentIndex + 1);
-        }
-    }
-    
-    return importantPages;
-}
-
-// =======================================
-// دالة جديدة: تفريغ الصفحات البعيدة (معدلة)
-// =======================================
-function unloadDistantPages(centerIndex) {
-    // ✅ نحتفظ فقط بـ: الصفحة السابقة، الحالية، والتالية
-    const pagesToKeep = new Set();
-    pagesToKeep.add(centerIndex);
-    if (centerIndex - 1 >= 0) pagesToKeep.add(centerIndex - 1);
-    if (centerIndex + 1 < images.length) pagesToKeep.add(centerIndex + 1);
-    
-    // تفريغ فقط الصفحات المحملة فعلياً والتي ليست في مجموعة الاحتفاظ
-    loadedPages.forEach((index) => {
-        if (!pagesToKeep.has(index)) {
-            const container = pageContainers[index];
-            const canvas = container.querySelector('canvas');
-            unloadImageFromCanvas(canvas, index);
-        }
-    });
-}
-
-// =======================================
-// معالجة التمرير (معدلة)
+// معالجة التمرير (معدلة للتمرير السريع)
 // =======================================
 function handleScroll() {
-    const viewportHeight = pageView.clientHeight;
-    const scrollTop = pageView.scrollTop;
+    const currentScrollTop = pageView.scrollTop;
     
-    // حساب سرعة التمرير
-    const scrollDelta = Math.abs(scrollTop - lastScrollPosition);
-    scrollDirection = scrollTop > lastScrollPosition ? 'down' : 'up';
-    lastScrollPosition = scrollTop;
+    // تحديد اتجاه التمرير
+    scrollDirection = currentScrollTop > lastScrollTop ? 'down' : 'up';
+    lastScrollTop = currentScrollTop;
     
-    // تحديد إذا كان التمرير سريعاً
-    isScrollingFast = scrollDelta > SCROLL_THRESHOLD;
+    // زيادة عداد التمرير السريع
+    fastScrollCount++;
     
-    // إلغاء التايمر السابق
-    if (scrollTimeout) {
-        clearTimeout(scrollTimeout);
+    // منع التحميل أثناء التمرير
+    if (!isScrolling) {
+        isScrolling = true;
     }
     
-    // حساب الصفحات المرئية حالياً
-    const visibleIndices = new Set();
+    // إعادة تعيين المؤقت في كل مرة يتحرك فيها المستخدم
+    clearTimeout(scrollTimeout);
+    clearTimeout(touchEndTimeout);
+    
+    // انتظار حتى يتوقف التمرير
+    scrollTimeout = setTimeout(() => {
+        // التحقق من أن المستخدم توقف بالفعل عن التمرير
+        if (!isTouching) {
+            handleScrollEnd();
+        }
+    }, 150);
+    
+    // تحديث العنصر النشط أثناء التمرير (بدون تحميل)
+    updateSidebarActive(getCurrentPageIndex());
+}
+
+// =======================================
+// معالجة بداية اللمس
+// =======================================
+function handleTouchStart() {
+    isTouching = true;
+    isScrolling = true;
+    fastScrollCount = 0;
+}
+
+// =======================================
+// معالجة نهاية اللمس
+// =======================================
+function handleTouchEnd() {
+    isTouching = false;
+    
+    // انتظر قليلاً للتأكد من أن المستخدم لا يزال في نفس المكان
+    touchEndTimeout = setTimeout(() => {
+        if (!isScrolling) {
+            handleScrollEnd();
+        } else {
+            // إذا كان لا يزال في وضع التمرير، انتظر أكثر
+            setTimeout(() => {
+                if (!isScrolling && !isTouching) {
+                    handleScrollEnd();
+                }
+            }, 100);
+        }
+    }, 200);
+}
+
+// =======================================
+// التحقق إذا كانت الصفحة مرئية
+// =======================================
+function isPageVisible(index) {
+    const container = pageContainers[index];
+    if (!container) return false;
+    
+    const viewportHeight = pageView.clientHeight;
+    const scrollTop = pageView.scrollTop;
+    const containerTop = container.offsetTop;
+    const containerBottom = containerTop + container.offsetHeight;
+    
+    return (containerBottom >= scrollTop && containerTop <= scrollTop + viewportHeight);
+}
+
+// =======================================
+// الحصول على الصفحة المركزية في الشاشة
+// =======================================
+function getCenterPageIndex() {
+    const viewportHeight = pageView.clientHeight;
+    const scrollTop = pageView.scrollTop;
+    const viewportCenter = scrollTop + viewportHeight / 2;
+    
+    let centerIndex = 0;
+    let minDistance = Infinity;
+    
     pageContainers.forEach((container, index) => {
         const containerTop = container.offsetTop;
         const containerBottom = containerTop + container.offsetHeight;
+        const containerCenter = (containerTop + containerBottom) / 2;
         
-        if (containerBottom >= scrollTop && containerTop <= scrollTop + viewportHeight) {
-            visibleIndices.add(index);
+        const distance = Math.abs(containerCenter - viewportCenter);
+        
+        if (distance < minDistance) {
+            minDistance = distance;
+            centerIndex = index;
         }
     });
     
-    // إذا كان هناك صفحات مرئية
-    if (visibleIndices.size > 0) {
-        // أخذ أول صفحة مرئية كمركز
-        const centerIndex = Math.min(...visibleIndices);
-        
-        // الحصول على الصفحات المهمة حسب سرعة التمرير
-        const importantPages = getImportantPages(centerIndex, isScrollingFast);
-        
-        // إضافة الصفحات المهمة إلى قائمة الانتظار
-        importantPages.forEach(index => {
-            if (!loadedPages.has(index)) {
-                pendingLoadIndices.add(index);
-            }
-        });
-        
-        // ✅ تفريغ فقط الصفحات المحملة والتي أصبحت بعيدة
-        unloadDistantPages(centerIndex);
-        
-        // إذا كان التمرير بطيئاً، نحمّل فوراً
-        if (!isScrollingFast) {
-            loadPendingPages();
-        } else {
-            // إذا كان التمرير سريعاً، ننتظر حتى يتوقف ثم نحمّل
-            scrollTimeout = setTimeout(() => {
-                // عند التوقف، نحمّل الصفحة الحالية والتي قبلها وبعدها
-                const finalCenterIndex = Math.min(...visibleIndices);
-                const fullRange = getImportantPages(finalCenterIndex, false);
-                fullRange.forEach(index => {
-                    if (!loadedPages.has(index)) {
-                        pendingLoadIndices.add(index);
-                    }
-                });
-                loadPendingPages();
-                scrollTimeout = null;
-            }, LOAD_DELAY);
+    return centerIndex;
+}
+
+// =======================================
+// معالجة نهاية التمرير (تحميل الصفحة المركزية فقط)
+// =======================================
+function handleScrollEnd() {
+    if (fastScrollCount > 10) {
+        console.log('تمرير سريع detected, تحميل الصفحة المركزية فقط');
+    }
+    
+    // الحصول على الصفحة المركزية في الشاشة
+    const centerIndex = getCenterPageIndex();
+    
+    // تحميل الصفحة المركزية فقط (وهي ستقوم تلقائياً بإزالة الصفحة السابقة)
+    if (centerIndex >= 0 && centerIndex < images.length) {
+        if (!loadedPages.has(centerIndex) || currentVisiblePage !== centerIndex) {
+            const container = pageContainers[centerIndex];
+            const canvas = container.querySelector('canvas');
+            loadImageIntoCanvas(canvas, images[centerIndex], centerIndex);
         }
     }
     
-    updateSidebarActive(getCurrentPageIndex());
+    // إعادة تعيين المتغيرات
+    isScrolling = false;
+    fastScrollCount = 0;
+    
+    // تحديث العنصر النشط
+    updateSidebarActive(centerIndex);
 }
 
 // =======================================
@@ -512,47 +522,47 @@ function getCurrentPageIndex() {
 }
 
 // =======================================
-// التمرير إلى صفحة (معدلة)
+// التمرير إلى صفحة (معدلة للتحميل المباشر)
 // =======================================
 function scrollToPage(index) {
-    pageContainers[index].scrollIntoView({
-        behavior: 'smooth',
-        block: 'start'
-    });
-    updateSidebarActive(index);
-    
-    // ✅ تحميل الصفحة المطلوبة والتي قبلها وبعدها فقط
-    setTimeout(() => {
-        // الصفحة السابقة
-        if (index - 1 >= 0 && !loadedPages.has(index - 1)) {
-            const container = pageContainers[index - 1];
-            const canvas = container.querySelector('canvas');
-            loadImageIntoCanvas(canvas, images[index - 1], index - 1);
-        }
-        
-        // الصفحة الحالية
-        if (!loadedPages.has(index)) {
-            const container = pageContainers[index];
+    // تحميل الصفحة المستهدفة مباشرة (وهي ستقوم تلقائياً بإزالة الصفحة السابقة)
+    const container = pageContainers[index];
+    if (container) {
+        if (!loadedPages.has(index) || currentVisiblePage !== index) {
             const canvas = container.querySelector('canvas');
             loadImageIntoCanvas(canvas, images[index], index);
         }
-        
-        // الصفحة التالية
-        if (index + 1 < images.length && !loadedPages.has(index + 1)) {
-            const container = pageContainers[index + 1];
-            const canvas = container.querySelector('canvas');
-            loadImageIntoCanvas(canvas, images[index + 1], index + 1);
-        }
-    }, 100);
+    }
+    
+    // إلغاء أي مؤقتات تمرير قائمة
+    clearTimeout(scrollTimeout);
+    clearTimeout(touchEndTimeout);
+    
+    // تعطيل معالج التمرير مؤقتاً
+    isScrolling = true;
+    
+    // التمرير إلى الصفحة
+    container.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start'
+    });
+    
+    updateSidebarActive(index);
+    
+    // إعادة تفعيل معالج التمرير بعد انتهاء التمرير المتحكم به
+    setTimeout(() => {
+        isScrolling = false;
+    }, 500);
 }
 
 // =======================================
-// تحديث العنصر النشط
+// تحديث العنصر النشط (معدل)
 // =======================================
 function updateSidebarActive(index) {
     Array.from(sidebar.children).forEach((el, i) => {
         if (i === index) {
             el.classList.add('active');
+            // تمرير الشريط الجانبي بسلاسة
             el.scrollIntoView({
                 behavior: 'smooth',
                 block: 'center'
@@ -868,7 +878,7 @@ async function downloadPDF() {
 }
 
 // =======================================
-// مشاركة PDF
+// مشاركة PDF (معدلة نهائياً)
 // =======================================
 async function sharePDF() {
     // التحقق من أن الزر مفعل
@@ -986,7 +996,7 @@ async function sharePDF() {
 }
 
 // =======================================
-// تشغيل التطبيق
+// تشغيل التطبيق (معدل مع إضافة مستمعات اللمس)
 // =======================================
 (async () => {
     try {
@@ -1010,7 +1020,33 @@ async function sharePDF() {
         await displayPages();
         scrollToPage(0);
 
+        // إضافة مستمعات التمرير واللمس
         pageView.addEventListener('scroll', handleScroll);
+        pageView.addEventListener('touchstart', handleTouchStart);
+        pageView.addEventListener('touchend', handleTouchEnd);
+        
+        // مستمعات إضافية للموس
+        pageView.addEventListener('mousedown', () => {
+            isTouching = true;
+            isScrolling = true;
+        });
+        
+        pageView.addEventListener('mouseup', () => {
+            isTouching = false;
+            setTimeout(() => {
+                if (!isScrolling) {
+                    handleScrollEnd();
+                }
+            }, 100);
+        });
+        
+        pageView.addEventListener('mouseleave', () => {
+            if (isTouching) {
+                isTouching = false;
+                handleScrollEnd();
+            }
+        });
+        
         setTimeout(handleScroll, 100);
 
         // بدء إنشاء PDF مسبقاً
