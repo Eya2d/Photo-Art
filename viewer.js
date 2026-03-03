@@ -644,7 +644,7 @@ async function imageToProcessedDataURL(imgSrc, preserveTransparency = true) {
 }
 
 // =======================================
-// إنشاء PDF (معدل للسرعة مع تقليل التأخير)
+// إنشاء PDF
 // =======================================
 async function generatePDFBlob(progressCallback) {
     const { jsPDF } = window.jspdf;
@@ -663,33 +663,15 @@ async function generatePDFBlob(progressCallback) {
     const marginOuter = 0.5;
     const marginInner = 0.75;
 
-    // حساب حجم الدفعات (batch size) للصور الكبيرة
-    const batchSize = images.length > 50 ? 5 : (images.length > 30 ? 3 : 1);
-    
     for (let i = 0; i < images.length; i++) {
         if (stopPDFGeneration) {
             throw new Error('PDF generation stopped by user');
         }
         
-        // تحديث التقدم بشكل أقل تكراراً للصور الكثيرة
         if (progressCallback) {
             const progress = Math.floor(((i + 1) / images.length) * 100);
-            
-            // للصور الكثيرة، نحدث التقدم كل بضع صور
-            if (images.length > 50) {
-                if (i % 5 === 0 || i === images.length - 1) {
-                    progressCallback(progress);
-                }
-            } else if (images.length > 30) {
-                if (i % 3 === 0 || i === images.length - 1) {
-                    progressCallback(progress);
-                }
-            } else {
-                progressCallback(progress);
-            }
-            
-            // تقليل التأخير بشكل كبير
-            await delay(10); // من 50ms إلى 10ms
+            progressCallback(progress);
+            await delay(50);
         }
 
         try {
@@ -700,16 +682,7 @@ async function generatePDFBlob(progressCallback) {
             }
             
             const isPNG = imgSrc.startsWith('data:image/png');
-            
-            // معالجة الصور بشكل أسرع
-            let processedSrc;
-            if (i % batchSize === 0) {
-                // معالجة دفعة من الصور
-                processedSrc = await imageToProcessedDataURL(imgSrc, isPNG);
-            } else {
-                // استخدام معالجة أسرع للصور المتتالية
-                processedSrc = await imageToProcessedDataURL(imgSrc, isPNG);
-            }
+            const processedSrc = await imageToProcessedDataURL(imgSrc, isPNG);
             
             const isEven = (i + 1) % 2 === 0;
             const marginLeft = isEven ? marginOuter : marginInner;
@@ -849,7 +822,7 @@ async function preGeneratePDF() {
 }
 
 // =======================================
-// تنزيل PDF (معدل للسرعة)
+// تنزيل PDF
 // =======================================
 async function downloadPDF() {
     // التحقق من أن الزر مفعل
@@ -893,39 +866,22 @@ async function downloadPDF() {
             console.log('استخدام PDF المخزن مؤقتاً');
             blob = cachedPDFBlob;
             
-            // محاكاة تقدم سريع جداً (5 خطوات فقط)
-            const steps = 5;
-            for (let i = 1; i <= steps; i++) {
-                const progress = Math.floor((i / steps) * 100);
-                progressBar.style.width = progress + '%';
-                progressText.textContent = progress + '%';
-                await delay(20); // 20ms فقط لكل خطوة
+            for (let i = 0; i <= 100; i += 10) {
+                progressBar.style.width = i + '%';
+                progressText.textContent = i + '%';
+                await delay(30);
             }
         } else {
-            // إنشاء PDF مع تقدم أسرع
             blob = await generatePDFBlob((progress) => {
-                // تضخيم النسبة لتظهر أسرع للمستخدم
-                let amplifiedProgress = progress;
-                
-                // إذا كان عدد الصور كبيراً، نضخم النسبة أكثر
-                if (images.length > 30) {
-                    // تضخيم النسبة: مثلاً 50% حقيقي يصبح 80% في الواجهة
-                    amplifiedProgress = Math.min(95, Math.floor(progress * 1.5));
-                } else if (images.length > 20) {
-                    amplifiedProgress = Math.min(95, Math.floor(progress * 1.3));
-                } else if (images.length > 10) {
-                    amplifiedProgress = Math.min(95, Math.floor(progress * 1.2));
-                }
-                
-                progressBar.style.width = amplifiedProgress + '%';
-                progressText.textContent = amplifiedProgress + '%';
+                progressBar.style.width = progress + '%';
+                progressText.textContent = progress + '%';
             });
         }
 
-        // قفزة سريعة إلى 100%
         progressBar.style.width = '100%';
         progressText.textContent = '100%';
-        await delay(100); // تأخير بسيط جداً
+
+        await delay(300);
 
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -936,12 +892,12 @@ async function downloadPDF() {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
 
-        setTimeout(preGeneratePDF, 500); // إنشاء PDF جديد بعد نصف ثانية
+        setTimeout(preGeneratePDF, 1000);
 
     } catch (e) {
         if (e.message === 'PDF generation stopped by user') {
             progressText.textContent = 'تم الإيقاف';
-            await delay(500);
+            await delay(1000);
         } else {
             alert('فشل إنشاء PDF: ' + e.message);
             console.error(e);
@@ -956,7 +912,7 @@ async function downloadPDF() {
 }
 
 // =======================================
-// مشاركة PDF (معدلة للسرعة)
+// مشاركة PDF (معدلة نهائياً)
 // =======================================
 async function sharePDF() {
     // التحقق من أن الزر مفعل
@@ -988,27 +944,29 @@ async function sharePDF() {
     progressText.textContent = '0%';
 
     try {
+        let blob;
+        
         // يجب أن يكون PDF مخزناً مسبقاً
         if (!cachedPDFBlob) {
             alert('PDF غير جاهز للمشاركة بعد. الرجاء الانتظار.');
             return;
         }
         
-        // محاكاة تقدم سريع جداً (3 خطوات فقط)
-        const steps = 3;
-        for (let i = 1; i <= steps; i++) {
-            const progress = Math.floor((i / steps) * 100);
-            progressBar.style.width = progress + '%';
-            progressText.textContent = progress + '%';
-            await delay(15); // 15ms فقط لكل خطوة
+        blob = cachedPDFBlob;
+        
+        // محاكاة تقدم التحميل
+        for (let i = 0; i <= 100; i += 10) {
+            progressBar.style.width = i + '%';
+            progressText.textContent = i + '%';
+            await delay(20);
         }
 
         progressBar.style.width = '100%';
         progressText.textContent = 'اكتمل الإنشاء';
-        await delay(50); // تأخير بسيط جداً
+        await delay(200);
 
         // إنشاء كائن File
-        const file = new File([cachedPDFBlob], "Amazon-KDP-Book.pdf", {
+        const file = new File([blob], "Amazon-KDP-Book.pdf", {
             type: "application/pdf"
         });
 
@@ -1017,7 +975,7 @@ async function sharePDF() {
             alert("مشاركة الملفات غير مدعومة في هذا المتصفح");
             
             if (confirm("هل تريد تنزيل الملف بدلاً من ذلك؟")) {
-                const url = URL.createObjectURL(cachedPDFBlob);
+                const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
                 a.download = "Amazon-KDP-Book.pdf";
@@ -1031,7 +989,7 @@ async function sharePDF() {
 
         // مشاركة الملف
         progressText.textContent = 'فتح قائمة المشاركة...';
-        await delay(50);
+        await delay(100);
         
         await navigator.share({
             title: "Amazon-KDP-Book",
@@ -1040,15 +998,15 @@ async function sharePDF() {
         });
 
         progressText.textContent = 'تمت المشاركة بنجاح';
-        await delay(500);
+        await delay(1000);
 
-        // إنشاء PDF جديد في الخلفية (أسرع)
-        setTimeout(preGeneratePDF, 500);
+        // إنشاء PDF جديد في الخلفية
+        setTimeout(preGeneratePDF, 1000);
 
     } catch (err) {
         if (err.message === 'PDF generation stopped by user') {
             progressText.textContent = 'تم الإيقاف';
-            await delay(500);
+            await delay(1000);
         } else if (err.name !== "AbortError") {
             console.error('Share error:', err);
             
@@ -1064,10 +1022,10 @@ async function sharePDF() {
         stopBtn.style.opacity = '0.5';
         isGeneratingPDF = false;
         
-        // إعادة تفعيل زر المشاركة بعد نصف ثانية
+        // إعادة تفعيل زر المشاركة بعد ثانية واحدة
         setTimeout(() => {
             checkPDFReady();
-        }, 500);
+        }, 1000);
     }
 }
 
