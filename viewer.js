@@ -2,207 +2,411 @@ document.addEventListener("DOMContentLoaded", () => {
 const sidebar = document.getElementById('sidebar');
 const pageView = document.getElementById('page-view');
 
-let images = JSON.parse(localStorage.getItem('pdfImages') || '[]');
+// متغيرات IndexedDB
+const DB_NAME = 'ImageGalleryDB';
+const DB_VERSION = 1;
+const STORE_NAME = 'images';
+let db;
+let images = [];
 let pageContainers = [];
-let isLoading = false;
-let loadedCount = 0;
-const BATCH_SIZE = 10; // تحميل 10 صور في كل دفعة
+
+// عناصر مؤشر التحميل
+const progressContainer = document.getElementById('progress-container');
+const progressBar = document.getElementById('progress-bar');
+const progressText = document.getElementById('progress-text');
 
 // =======================================
-// تحميل الصور على دفعات
+// متغيرات التحكم في إيقاف PDF
 // =======================================
-async function loadImageBatch(startIndex) {
-    if (isLoading || startIndex >= images.length) return;
-    
-    isLoading = true;
-    const endIndex = Math.min(startIndex + BATCH_SIZE, images.length);
-    
-    // إنشاء عناصر وهمية أولاً للحفاظ على التخطيط
-    for (let i = startIndex; i < endIndex; i++) {
-        if (!pageContainers[i]) {
-            createPlaceholder(i);
-        }
-    }
-    
-    // تحميل الصور الفعلية
-    const loadPromises = [];
-    for (let i = startIndex; i < endIndex; i++) {
-        loadPromises.push(loadPageImage(i));
-    }
-    
-    await Promise.all(loadPromises);
-    loadedCount = endIndex;
-    isLoading = false;
-    
-    // تحميل الدفعة التالية إذا كان المستخدم قريباً من النهاية
-    checkAndLoadMore();
+let stopPDFGeneration = false;
+let isGeneratingPDF = false;
+
+// متغيرات للتحكم في التحميل الديناميكي
+let loadedPages = new Set();
+let canvasReferences = new Map();
+
+// متغير للتخزين المؤقت للـ PDF
+let cachedPDFBlob = null;
+let isPreGeneratingPDF = false;
+
+// متغيرات للتحكم في حالة الأزرار
+let isShareButtonReady = false;
+let isDownloadButtonReady = false;
+
+// دوال تأخير
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 // =======================================
-// إنشاء عنصر وهمي (Placeholder)
+// دالة لإظهار تأثير Shimmer على الأزرار فقط
 // =======================================
-function createPlaceholder(index) {
-    const src = images[index];
-    
-    // عنصر القائمة الجانبية
-    const item = document.createElement('div');
-    item.classList.add('sidebar-item');
-    if (index === 0) item.classList.add('active');
-    
-    const inner = document.createElement('div');
-    inner.classList.add('sidebar-item-inner', 'Wave-cloud');
-    
-    const canvas = document.createElement('canvas');
-    canvas.width = 300;
-    canvas.height = 300;
-    canvas.dataset.index = index;
-    canvas.dataset.src = src;
-    
-    // رسم placeholder
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#f0f0f0';
-    ctx.fillRect(0, 0, 300, 300);
-    ctx.fillStyle = '#999';
-    ctx.font = 'bold 20px Arial';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(`صفحة ${index + 1}`, 150, 150);
-    
-    inner.appendChild(canvas);
-    
-    const pageNum = document.createElement('div');
-    pageNum.classList.add('page-number');
-    pageNum.textContent = `${index + 1}`;
-    
-    item.appendChild(inner);
-    item.appendChild(pageNum);
-    
-    item.addEventListener('click', () => scrollToPage(index));
-    
-    sidebar.appendChild(item);
-    
-    // عنصر الصفحة الرئيسية
-    const container = document.createElement('div');
-    container.classList.add('page-container');
-    container.dataset.index = index;
-    
-    const pageCanvas = document.createElement('canvas');
-    pageCanvas.width = 794 * 3;
-    pageCanvas.height = 1123 * 3;
-    pageCanvas.style.width = '794px';
-    pageCanvas.style.height = '1123px';
-    pageCanvas.dataset.src = src;
-    
-    // رسم placeholder للصفحة
-    const pageCtx = pageCanvas.getContext('2d');
-    pageCtx.fillStyle = '#f0f0f0';
-    pageCtx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
-    pageCtx.fillStyle = '#999';
-    pageCtx.font = 'bold 40px Arial';
-    pageCtx.textAlign = 'center';
-    pageCtx.textBaseline = 'middle';
-    pageCtx.fillText(`جاري تحميل الصفحة ${index + 1}...`, pageCanvas.width/2, pageCanvas.height/2);
-    
-    container.appendChild(pageCanvas);
-    pageView.appendChild(container);
-    pageContainers[index] = container;
+function showShimmer(button) {
+    if (button) {
+        button.classList.add('shimmer-loading');
+    }
+}
+
+function hideShimmer() {
+    // إزالة كلاس shimmer من جميع الأزرار
+    document.querySelectorAll('.shimmer-loading').forEach(btn => {
+        btn.classList.remove('shimmer-loading');
+    });
 }
 
 // =======================================
-// تحميل صورة صفحة واحدة
+// دالة لتفعيل/تعطيل الأزرار الرئيسية
 // =======================================
-function loadPageImage(index) {
-    return new Promise((resolve) => {
-        const container = pageContainers[index];
-        if (!container) {
-            resolve();
-            return;
-        }
+function setButtonsState(shareState, downloadState) {
+    const shareBtn = document.getElementById('share-button');
+    const downloadBtn = document.getElementById('download-button');
+    
+    if (shareBtn) {
+        shareBtn.disabled = !shareState;
+        shareBtn.style.opacity = shareState ? '1' : '0.5';
+        shareBtn.style.cursor = shareState ? 'pointer' : 'not-allowed';
+    }
+    
+    if (downloadBtn) {
+        downloadBtn.disabled = !downloadState;
+        downloadBtn.style.opacity = downloadState ? '1' : '0.5';
+        downloadBtn.style.cursor = downloadState ? 'pointer' : 'not-allowed';
+    }
+    
+    isShareButtonReady = shareState;
+    isDownloadButtonReady = downloadState;
+}
+
+// =======================================
+// دالة للتحقق من جاهزية PDF
+// =======================================
+function checkPDFReady() {
+    // زر التنزيل يصبح جاهزاً إذا كان هناك PDF مخزن أو إذا انتهى التحميل المسبق
+    const downloadReady = cachedPDFBlob !== null || !isPreGeneratingPDF;
+    
+    // زر المشاركة يحتاج إلى PDF مخزن فقط (لضمان التفاعل المباشر)
+    const shareReady = cachedPDFBlob !== null;
+    
+    setButtonsState(shareReady, downloadReady);
+    
+    if (shareReady || downloadReady) {
+        hideShimmer();
+    }
+}
+
+// =======================================
+// إيقاف إنشاء PDF
+// =======================================
+function stopPDF() {
+    if (isGeneratingPDF) {
+        stopPDFGeneration = true;
+        const stopBtn = document.getElementById('stop-bar');
+        stopBtn.disabled = true;
+        stopBtn.style.opacity = '0.5';
+        progressText.textContent = 'جاري الإيقاف...';
+    }
+}
+
+// =======================================
+// تهيئة IndexedDB
+// =======================================
+function initDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
         
-        const oldCanvas = container.querySelector('canvas');
-        const src = oldCanvas.dataset.src;
-        
-        const newCanvas = document.createElement('canvas');
-        newCanvas.width = oldCanvas.width;
-        newCanvas.height = oldCanvas.height;
-        newCanvas.style.width = oldCanvas.style.width;
-        newCanvas.style.height = oldCanvas.style.height;
-        
-        const ctx = newCanvas.getContext('2d');
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = "high";
-        
-        const img = new Image();
-        
-        // استخدام setTimeout لمنع تجمد الواجهة
-        setTimeout(() => {
-            img.src = src;
-        }, 0);
-        
-        img.onload = () => {
-            ctx.clearRect(0, 0, newCanvas.width, newCanvas.height);
-            const scale = Math.min(newCanvas.width / img.width, newCanvas.height / img.height);
-            const w = img.width * scale;
-            const h = img.height * scale;
-            ctx.drawImage(img, (newCanvas.width - w) / 2, (newCanvas.height - h) / 2, w, h);
-            
-            // استبدال canvas في القائمة الجانبية
-            const sidebarCanvas = sidebar.children[index]?.querySelector('canvas');
-            if (sidebarCanvas) {
-                const sidebarCtx = sidebarCanvas.getContext('2d');
-                sidebarCtx.clearRect(0, 0, 300, 300);
-                const sidebarScale = Math.min(300 / img.width, 300 / img.height);
-                const sidebarW = img.width * sidebarScale;
-                const sidebarH = img.height * sidebarScale;
-                sidebarCtx.drawImage(img, (300 - sidebarW) / 2, (300 - sidebarH) / 2, sidebarW, sidebarH);
-            }
-            
-            // استبدال canvas في الصفحة الرئيسية
-            container.replaceChild(newCanvas, oldCanvas);
-            resolve();
+        request.onerror = (event) => {
+            console.error('Database error:', event.target.error);
+            reject('Error opening database');
         };
         
-        img.onerror = () => {
-            console.error(`فشل تحميل الصورة ${index + 1}`);
+        request.onsuccess = (event) => {
+            db = event.target.result;
+            console.log('Database opened successfully');
+            resolve(db);
+        };
+        
+        request.onupgradeneeded = (event) => {
+            const db = event.target.result;
+            
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+                const store = db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
+                store.createIndex('order', 'order', { unique: false });
+                console.log('Object store created');
+            }
+        };
+    });
+}
+
+// =======================================
+// تحميل الصور من IndexedDB
+// =======================================
+async function loadImagesFromDB() {
+    try {
+        if (!db) await initDB();
+        
+        const transaction = db.transaction([STORE_NAME], 'readonly');
+        const store = transaction.objectStore(STORE_NAME);
+        const index = store.index('order');
+        const request = index.getAll();
+        
+        return new Promise((resolve, reject) => {
+            request.onsuccess = () => {
+                const items = request.result;
+                items.sort((a, b) => a.order - b.order);
+                images = items.map(item => item.dataURL);
+                resolve(images);
+            };
+            
+            request.onerror = () => {
+                reject('Error loading images');
+            };
+        });
+    } catch (error) {
+        console.error('Error loading from DB:', error);
+        images = [];
+    }
+}
+
+// =======================================
+// عرض القائمة الجانبية
+// =======================================
+async function displaySidebar() {
+    sidebar.innerHTML = '';
+
+    for (let index = 0; index < images.length; index++) {
+        const src = images[index];
+
+        const item = document.createElement('div');
+        item.classList.add('sidebar-item');
+        if (index === 0) item.classList.add('active');
+
+        const inner = document.createElement('div');
+        inner.classList.add('sidebar-item-inner', 'Wave-cloud');
+        
+        // ★★★ ضمان عدم إزالة الصورة من الكانفا ★★★
+        // حفظ الرابط الأصلي في attribute مخصص لاستخدامه لاحقاً إذا لزم الأمر
+        inner.setAttribute('data-original-src', src);
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d', { alpha: true });
+        canvas.width = 300;
+        canvas.height = 300;
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+
+        const image = new Image();
+        image.src = src;
+        image.onload = () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            if (isImageWhite(image)) {
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+                ctx.shadowBlur = 10;
+                ctx.shadowOffsetX = 2;
+                ctx.shadowOffsetY = 2;
+            }
+            
+            let scale = Math.min(canvas.width / image.width, canvas.height / image.height);
+            let w = image.width * scale;
+            let h = image.height * scale;
+            ctx.drawImage(image, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
+            
+            ctx.shadowColor = 'transparent';
+        };
+
+        inner.appendChild(canvas);
+
+        const pageNum = document.createElement('div');
+        pageNum.classList.add('page-number');
+        pageNum.textContent = `${index + 1}`;
+
+        item.appendChild(inner);
+        item.appendChild(pageNum);
+
+        item.addEventListener('click', () => scrollToPage(index));
+
+        sidebar.appendChild(item);
+        await delay(1);
+    }
+}
+
+// =======================================
+// تحميل صورة في Canvas
+// =======================================
+function loadImageIntoCanvas(canvas, imageSrc, index) {
+    return new Promise((resolve) => {
+        const ctx = canvas.getContext('2d', { alpha: true });
+        
+        const image = new Image();
+        image.src = imageSrc;
+        image.onload = () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            if (isImageWhite(image)) {
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.2)';
+                ctx.shadowBlur = 20;
+                ctx.shadowOffsetX = 4;
+                ctx.shadowOffsetY = 4;
+            }
+            
+            let scale = Math.min(canvas.width / image.width, canvas.height / image.height);
+            let w = image.width * scale;
+            let h = image.height * scale;
+            ctx.drawImage(image, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
+            
+            ctx.shadowColor = 'transparent';
+            
+            loadedPages.add(index);
+            canvasReferences.set(index, image);
+            
             resolve();
         };
     });
 }
 
 // =======================================
-// التحقق من الحاجة لتحميل المزيد
+// تفريغ صورة من Canvas
 // =======================================
-function checkAndLoadMore() {
-    if (loadedCount >= images.length) return;
-    
-    const scrollPosition = pageView.scrollTop + pageView.clientHeight;
-    const totalHeight = pageView.scrollHeight;
-    
-    // إذا كان المستخدم قريباً من النهاية (آخر 20%)
-    if (scrollPosition > totalHeight * 0.8) {
-        loadImageBatch(loadedCount);
+function unloadImageFromCanvas(canvas, index) {
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    loadedPages.delete(index);
+    canvasReferences.delete(index);
+}
+
+// =======================================
+// عرض الصفحات
+// =======================================
+async function displayPages() {
+    pageView.innerHTML = '';
+    pageContainers = [];
+    loadedPages.clear();
+    canvasReferences.clear();
+
+    for (let index = 0; index < images.length; index++) {
+        const container = document.createElement('div');
+        container.classList.add('page-container');
+        container.dataset.index = index;
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d', { alpha: true });
+
+        const scaleFactor = 4;
+        canvas.width = 794 * scaleFactor;
+        canvas.height = 1123 * scaleFactor;
+        canvas.style.width = '794px';
+        canvas.style.height = '1123px';
+
+        container.appendChild(canvas);
+        pageView.appendChild(container);
+        pageContainers.push(container);
     }
+
+    if (images.length > 0) {
+        await loadImageIntoCanvas(pageContainers[0].querySelector('canvas'), images[0], 0);
+    }
+}
+
+// =======================================
+// التحقق إذا كانت الصورة بيضاء بالكامل
+// =======================================
+function isImageWhite(img) {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = img.width;
+    canvas.height = img.height;
+    ctx.drawImage(img, 0, 0);
+    
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+    
+    let whitePixels = 0;
+    const totalPixels = data.length / 4;
+    
+    for (let i = 0; i < data.length; i += 40) {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        const a = data[i + 3];
+        
+        if (r > 250 && g > 250 && b > 250 && a > 250) {
+            whitePixels++;
+        }
+    }
+    
+    return (whitePixels / (totalPixels / 10)) > 0.9;
+}
+
+// =======================================
+// معالجة التمرير
+// =======================================
+function handleScroll() {
+    const viewportHeight = pageView.clientHeight;
+    const scrollTop = pageView.scrollTop;
+    
+    const visibleIndices = new Set();
+    
+    pageContainers.forEach((container, index) => {
+        const containerTop = container.offsetTop;
+        const containerBottom = containerTop + container.offsetHeight;
+        
+        if (containerBottom >= scrollTop && containerTop <= scrollTop + viewportHeight) {
+            visibleIndices.add(index);
+            
+            if (index > 0) visibleIndices.add(index - 1);
+            if (index < pageContainers.length - 1) visibleIndices.add(index + 1);
+        }
+    });
+    
+    visibleIndices.forEach(async (index) => {
+        if (!loadedPages.has(index)) {
+            const container = pageContainers[index];
+            const canvas = container.querySelector('canvas');
+            await loadImageIntoCanvas(canvas, images[index], index);
+        }
+    });
+    
+    loadedPages.forEach((index) => {
+        if (!visibleIndices.has(index)) {
+            const container = pageContainers[index];
+            const canvas = container.querySelector('canvas');
+            unloadImageFromCanvas(canvas, index);
+        }
+    });
+    
+    updateSidebarActive(getCurrentPageIndex());
+}
+
+// =======================================
+// الحصول على رقم الصفحة الحالية
+// =======================================
+function getCurrentPageIndex() {
+    let viewMiddle = pageView.scrollTop + pageView.clientHeight / 2;
+    let closestIndex = 0;
+    let minDist = Infinity;
+
+    pageContainers.forEach((container, i) => {
+        const containerMiddle = container.offsetTop + container.offsetHeight / 2;
+        const dist = Math.abs(containerMiddle - viewMiddle);
+
+        if (dist < minDist) {
+            minDist = dist;
+            closestIndex = i;
+        }
+    });
+
+    return closestIndex;
 }
 
 // =======================================
 // التمرير إلى صفحة
 // =======================================
 function scrollToPage(index) {
-    if (index >= loadedCount) {
-        // تحميل الصفحة المطلوبة إذا لم تكن محملة
-        loadImageBatch(index);
-    }
-    
-    // تأخير التمرير قليلاً للسماح بتحميل الصفحة
-    setTimeout(() => {
-        if (pageContainers[index]) {
-            pageContainers[index].scrollIntoView({
-                behavior: 'smooth',
-                block: 'start'
-            });
-            updateSidebarActive(index);
-        }
-    }, 100);
+    pageContainers[index].scrollIntoView({
+        behavior: 'smooth',
+        block: 'start'
+    });
+    updateSidebarActive(index);
 }
 
 // =======================================
@@ -223,228 +427,472 @@ function updateSidebarActive(index) {
 }
 
 // =======================================
-// تتبع الصفحة الحالية
+// تحويل الصورة إلى DataURL
 // =======================================
-let scrollTimeout;
-pageView.addEventListener('scroll', () => {
-    // استخدام debounce لمنع التنفيذ المتكرر
-    clearTimeout(scrollTimeout);
-    scrollTimeout = setTimeout(() => {
-        let viewMiddle = pageView.scrollTop + pageView.clientHeight / 2;
+async function imageToProcessedDataURL(imgSrc, preserveTransparency = true) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.src = imgSrc;
         
-        let closestIndex = 0;
-        let minDist = Infinity;
-        
-        pageContainers.forEach((container, i) => {
-            if (container) {
-                const containerMiddle = container.offsetTop + container.offsetHeight / 2;
-                const dist = Math.abs(containerMiddle - viewMiddle);
-                
-                if (dist < minDist) {
-                    minDist = dist;
-                    closestIndex = i;
-                }
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            
+            const ctx = canvas.getContext('2d', { alpha: preserveTransparency });
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            if (!preserveTransparency) {
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
             }
-        });
+            
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            
+            if (preserveTransparency) {
+                resolve(canvas.toDataURL('image/png'));
+            } else {
+                resolve(canvas.toDataURL('image/jpeg', 1.0));
+            }
+        };
         
-        updateSidebarActive(closestIndex);
-        checkAndLoadMore();
-    }, 100);
-});
-
-// =======================================
-// عرض الصور المحفوظة
-// =======================================
-async function displaySavedImages() {
-    if (images.length === 0) {
-        pageView.innerHTML = '<div style="text-align: center; padding: 50px;">لا توجد صور محفوظة</div>';
-        return;
-    }
-    
-    // إنشاء العناصر الوهمية أولاً
-    for (let i = 0; i < images.length; i++) {
-        createPlaceholder(i);
-    }
-    
-    // بدء تحميل الدفعة الأولى
-    await loadImageBatch(0);
+        img.onerror = reject;
+    });
 }
 
 // =======================================
-// دوال PDF (بدون تغيير)
+// إنشاء PDF
 // =======================================
-function getImageTypeFromBase64(str) {
-    if (str.startsWith('data:image/jpeg')) return 'JPEG';
-    if (str.startsWith('data:image/png')) return 'PNG';
-    return 'JPEG';
-}
-
-async function generatePDFBlob() {
+async function generatePDFBlob(progressCallback) {
     const { jsPDF } = window.jspdf;
+
     const pdf = new jsPDF({
         orientation: 'p',
         unit: 'in',
-        format: [6, 9]
+        format: [6, 9],
+        compress: true
     });
-    
+
     const pageWidth = 6;
     const pageHeight = 9;
     const marginTop = 0.5;
     const marginBottom = 0.75;
     const marginOuter = 0.5;
     const marginInner = 0.75;
-    
-    // معالجة الصور بشكل متسلسل لمنع التجميد
+
     for (let i = 0; i < images.length; i++) {
-        // السماح بتحديث الواجهة كل 5 صور
-        if (i % 5 === 0) {
-            await new Promise(resolve => setTimeout(resolve, 10));
+        if (stopPDFGeneration) {
+            throw new Error('PDF generation stopped by user');
         }
         
-        let src = images[i];
-        let imgType = getImageTypeFromBase64(src);
-        
-        if (imgType !== 'PNG') {
-            const tempCanvas = document.createElement('canvas');
-            const tempCtx = tempCanvas.getContext('2d');
-            const tempImg = new Image();
+        if (progressCallback) {
+            const progress = Math.floor(((i + 1) / images.length) * 100);
+            progressCallback(progress);
+            await delay(50);
+        }
+
+        try {
+            const imgSrc = images[i];
             
-            tempImg.src = src;
-            await new Promise((res) => {
-                tempImg.onload = res;
-                tempImg.onerror = res;
+            if (stopPDFGeneration) {
+                throw new Error('PDF generation stopped by user');
+            }
+            
+            const isPNG = imgSrc.startsWith('data:image/png');
+            const processedSrc = await imageToProcessedDataURL(imgSrc, isPNG);
+            
+            const isEven = (i + 1) % 2 === 0;
+            const marginLeft = isEven ? marginOuter : marginInner;
+            const marginRight = isEven ? marginInner : marginOuter;
+
+            const contentWidth = pageWidth - marginLeft - marginRight;
+            const contentHeight = pageHeight - marginTop - marginBottom;
+
+            const img = new Image();
+            img.src = processedSrc;
+
+            await new Promise((res, rej) => {
+                img.onload = res;
+                img.onerror = rej;
             });
+
+            const ratio = Math.min(
+                contentWidth / (img.width / 300),
+                contentHeight / (img.height / 300)
+            );
+
+            const w = (img.width / 300) * ratio;
+            const h = (img.height / 300) * ratio;
+            const x = marginLeft + (contentWidth - w) / 2;
+            const y = marginTop + (contentHeight - h) / 2;
+
+            pdf.addImage(processedSrc, 'JPEG', x, y, w, h, undefined, 'FAST');
+
+            pdf.setFont("helvetica", "normal");
+            pdf.setFontSize(10);
+            pdf.setTextColor(128, 128, 128);
+            pdf.text(
+                String(i + 1),
+                pageWidth / 2,
+                pageHeight - 0.4,
+                { align: "center" }
+            );
+
+            if (i < images.length - 1) {
+                pdf.addPage();
+            }
             
-            tempCanvas.width = tempImg.width;
-            tempCanvas.height = tempImg.height;
-            tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
-            tempCtx.drawImage(tempImg, 0, 0);
-            src = tempCanvas.toDataURL('image/png');
-            imgType = 'PNG';
-        }
-        
-        const isEven = (i + 1) % 2 === 0;
-        const marginLeft = isEven ? marginOuter : marginInner;
-        const marginRight = isEven ? marginInner : marginOuter;
-        const contentWidth = pageWidth - marginLeft - marginRight;
-        const contentHeight = pageHeight - marginTop - marginBottom;
-        
-        const img = new Image();
-        img.src = src;
-        await new Promise((res) => {
-            img.onload = res;
-            img.onerror = res;
-        });
-        
-        const ratio = Math.min(
-            contentWidth / (img.width / 300),
-            contentHeight / (img.height / 300)
-        );
-        
-        const w = (img.width / 300) * ratio;
-        const h = (img.height / 300) * ratio;
-        const x = marginLeft + (contentWidth - w) / 2;
-        const y = marginTop + (contentHeight - h) / 2;
-        
-        pdf.addImage(src, imgType, x, y, w, h, undefined, 'FAST');
-        pdf.setFont("helvetica", "normal");
-        pdf.setFontSize(10);
-        pdf.text(String(i + 1), pageWidth / 2, pageHeight - 0.4, { align: "center" });
-        
-        if (i < images.length - 1) {
-            pdf.addPage();
+        } catch (error) {
+            if (error.message === 'PDF generation stopped by user') {
+                throw error;
+            }
+            console.error(`Error processing image ${i + 1}:`, error);
+            
+            try {
+                const img = new Image();
+                img.src = images[i];
+                await new Promise((res, rej) => {
+                    img.onload = res;
+                    img.onerror = rej;
+                });
+                
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0);
+                
+                const fallbackSrc = canvas.toDataURL('image/jpeg', 0.95);
+                
+                const isEven = (i + 1) % 2 === 0;
+                const marginLeft = isEven ? marginOuter : marginInner;
+                const marginRight = isEven ? marginInner : marginOuter;
+                const contentWidth = pageWidth - marginLeft - marginRight;
+                const contentHeight = pageHeight - marginTop - marginBottom;
+                
+                const ratio = Math.min(
+                    contentWidth / (img.width / 300),
+                    contentHeight / (img.height / 300)
+                );
+                
+                const w = (img.width / 300) * ratio;
+                const h = (img.height / 300) * ratio;
+                const x = marginLeft + (contentWidth - w) / 2;
+                const y = marginTop + (contentHeight - h) / 2;
+                
+                pdf.addImage(fallbackSrc, 'JPEG', x, y, w, h, undefined, 'FAST');
+                
+                pdf.setFont("helvetica", "normal");
+                pdf.setFontSize(10);
+                pdf.setTextColor(128, 128, 128);
+                pdf.text(String(i + 1), pageWidth / 2, pageHeight - 0.4, { align: "center" });
+                
+                if (i < images.length - 1) pdf.addPage();
+                
+            } catch (fallbackError) {
+                if (fallbackError.message === 'PDF generation stopped by user') {
+                    throw fallbackError;
+                }
+                console.error(`Fallback also failed for image ${i + 1}:`, fallbackError);
+                throw new Error(`Failed to process image ${i + 1}`);
+            }
         }
     }
-    
+
     return pdf.output('blob');
+}
+
+// =======================================
+// إنشاء PDF مسبقاً
+// =======================================
+async function preGeneratePDF() {
+    if (images.length === 0 || isPreGeneratingPDF) return;
+    
+    isPreGeneratingPDF = true;
+    console.log('بدء إنشاء PDF مسبقاً...');
+    
+    // إظهار Shimmer على زر المشاركة والتنزيل فقط
+    showShimmer(document.getElementById('share-button'));
+    showShimmer(document.getElementById('download-button'));
+    
+    try {
+        const oldStopGeneration = stopPDFGeneration;
+        stopPDFGeneration = false;
+        
+        cachedPDFBlob = await generatePDFBlob((progress) => {
+            console.log(`تقدم إنشاء PDF المسبق: ${progress}%`);
+        });
+        
+        stopPDFGeneration = oldStopGeneration;
+        
+        console.log('تم إنشاء PDF مسبقاً بنجاح');
+        
+    } catch (error) {
+        console.error('فشل إنشاء PDF المسبق:', error);
+        cachedPDFBlob = null;
+    } finally {
+        isPreGeneratingPDF = false;
+        checkPDFReady();
+    }
 }
 
 // =======================================
 // تنزيل PDF
 // =======================================
 async function downloadPDF() {
-    const btn = document.getElementById('download-button');
-    btn.disabled = true;
+    // التحقق من أن الزر مفعل
+    if (!isDownloadButtonReady) {
+        alert('الرجاء الانتظار حتى اكتمال تجهيز الملف');
+        return;
+    }
     
+    const btn = document.getElementById('download-button');
+    const stopBtn = document.getElementById('stop-bar');
+    
+    // تعطيل الزر مؤقتاً
+    btn.disabled = true;
+    btn.style.opacity = '0.5';
+    
+    stopBtn.disabled = false;
+    stopBtn.style.opacity = '1';
+    
+    stopPDFGeneration = false;
+    isGeneratingPDF = true;
+
+    const fileName = prompt("أدخل اسم الملف قبل التنزيل:", "Amazon-KDP-Book");
+
+    if (!fileName) {
+        // إعادة تفعيل الزر إذا ألغى المستخدم
+        checkPDFReady();
+        stopBtn.disabled = true;
+        stopBtn.style.opacity = '0.5';
+        isGeneratingPDF = false;
+        return;
+    }
+
+    progressContainer.style.display = 'block';
+    progressBar.style.width = '0%';
+    progressText.textContent = '0%';
+
     try {
-        const fileName = prompt("أدخل اسم الملف قبل التنزيل:", "Amazon-KDP-Book");
-        if (!fileName) {
-            btn.disabled = false;
-            return;
+        let blob;
+        
+        if (cachedPDFBlob) {
+            console.log('استخدام PDF المخزن مؤقتاً');
+            blob = cachedPDFBlob;
+            
+            for (let i = 0; i <= 100; i += 10) {
+                progressBar.style.width = i + '%';
+                progressText.textContent = i + '%';
+                await delay(30);
+            }
+        } else {
+            blob = await generatePDFBlob((progress) => {
+                progressBar.style.width = progress + '%';
+                progressText.textContent = progress + '%';
+            });
         }
-        
-        // إظهار مؤشر التحميل
-        const loadingDiv = document.createElement('div');
-        loadingDiv.className = 'loading-indicator';
-        loadingDiv.textContent = 'جاري إنشاء PDF... قد يستغرق هذا دقيقة';
-        document.body.appendChild(loadingDiv);
-        
-        const blob = await generatePDFBlob();
+
+        progressBar.style.width = '100%';
+        progressText.textContent = '100%';
+
+        await delay(300);
+
         const url = URL.createObjectURL(blob);
-        
         const a = document.createElement('a');
         a.href = url;
         a.download = fileName.endsWith('.pdf') ? fileName : fileName + '.pdf';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        
         URL.revokeObjectURL(url);
-        document.body.removeChild(loadingDiv);
-        
+
+        setTimeout(preGeneratePDF, 1000);
+
     } catch (e) {
-        alert('فشل إنشاء PDF');
-        console.error(e);
+        if (e.message === 'PDF generation stopped by user') {
+            progressText.textContent = 'تم الإيقاف';
+            await delay(1000);
+        } else {
+            alert('فشل إنشاء PDF: ' + e.message);
+            console.error(e);
+        }
     } finally {
-        btn.disabled = false;
+        progressContainer.style.display = 'none';
+        checkPDFReady();
+        stopBtn.disabled = true;
+        stopBtn.style.opacity = '0.5';
+        isGeneratingPDF = false;
     }
 }
 
 // =======================================
-// مشاركة PDF
+// مشاركة PDF (معدلة نهائياً)
 // =======================================
 async function sharePDF() {
+    // التحقق من أن الزر مفعل
+    if (!isShareButtonReady) {
+        alert('الرجاء الانتظار حتى اكتمال تجهيز الملف للمشاركة');
+        return;
+    }
+    
     if (!navigator.share) {
         alert('المتصفح لا يدعم المشاركة');
         return;
     }
+
+    const shareBtn = document.getElementById('share-button');
+    const stopBtn = document.getElementById('stop-bar');
     
-    const fileName = prompt("أدخل اسم الملف للمشاركة:", "Amazon-KDP-Book") || "Amazon-KDP-Book";
-    const blob = await generatePDFBlob();
-    const file = new File([blob], fileName + '.pdf', { type: 'application/pdf' });
+    // تعطيل زر المشاركة فوراً لمنع النقر المتكرر
+    shareBtn.disabled = true;
+    shareBtn.style.opacity = '0.5';
     
-    await navigator.share({
-        title: fileName,
-        files: [file]
-    });
+    stopBtn.disabled = false;
+    stopBtn.style.opacity = '1';
+    
+    stopPDFGeneration = false;
+    isGeneratingPDF = true;
+
+    progressContainer.style.display = 'block';
+    progressBar.style.width = '0%';
+    progressText.textContent = '0%';
+
+    try {
+        let blob;
+        
+        // يجب أن يكون PDF مخزناً مسبقاً
+        if (!cachedPDFBlob) {
+            alert('PDF غير جاهز للمشاركة بعد. الرجاء الانتظار.');
+            return;
+        }
+        
+        blob = cachedPDFBlob;
+        
+        // محاكاة تقدم التحميل
+        for (let i = 0; i <= 100; i += 10) {
+            progressBar.style.width = i + '%';
+            progressText.textContent = i + '%';
+            await delay(20);
+        }
+
+        progressBar.style.width = '100%';
+        progressText.textContent = 'اكتمل الإنشاء';
+        await delay(200);
+
+        // إنشاء كائن File
+        const file = new File([blob], "Amazon-KDP-Book.pdf", {
+            type: "application/pdf"
+        });
+
+        // التحقق من دعم مشاركة الملفات
+        if (!navigator.canShare || !navigator.canShare({ files: [file] })) {
+            alert("مشاركة الملفات غير مدعومة في هذا المتصفح");
+            
+            if (confirm("هل تريد تنزيل الملف بدلاً من ذلك؟")) {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = "Amazon-KDP-Book.pdf";
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }
+            return;
+        }
+
+        // مشاركة الملف
+        progressText.textContent = 'فتح قائمة المشاركة...';
+        await delay(100);
+        
+        await navigator.share({
+            title: "Amazon-KDP-Book",
+            text: "كتاب PDF جاهز للنشر على Amazon KDP",
+            files: [file]
+        });
+
+        progressText.textContent = 'تمت المشاركة بنجاح';
+        await delay(1000);
+
+        // إنشاء PDF جديد في الخلفية
+        setTimeout(preGeneratePDF, 1000);
+
+    } catch (err) {
+        if (err.message === 'PDF generation stopped by user') {
+            progressText.textContent = 'تم الإيقاف';
+            await delay(1000);
+        } else if (err.name !== "AbortError") {
+            console.error('Share error:', err);
+            
+            if (err.message.includes('user gesture')) {
+                alert('خطأ في المشاركة: يرجى المحاولة مرة أخرى بعد ثانية');
+            } else {
+                alert('فشل المشاركة: ' + err.message);
+            }
+        }
+    } finally {
+        progressContainer.style.display = 'none';
+        stopBtn.disabled = true;
+        stopBtn.style.opacity = '0.5';
+        isGeneratingPDF = false;
+        
+        // إعادة تفعيل زر المشاركة بعد ثانية واحدة
+        setTimeout(() => {
+            checkPDFReady();
+        }, 1000);
+    }
 }
 
 // =======================================
-// إضافة مؤشر التحميل في CSS
+// تشغيل التطبيق
 // =======================================
-const style = document.createElement('style');
-style.textContent = `
-    .loading-indicator {
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: rgba(0,0,0,0.8);
-        color: white;
-        padding: 20px;
-        border-radius: 10px;
-        z-index: 9999;
-        font-size: 18px;
+(async () => {
+    try {
+        // تعطيل الأزرار في البداية
+        setButtonsState(false, false);
+        
+        // إظهار Shimmer على الأزرار فقط
+        showShimmer(document.getElementById('share-button'));
+        showShimmer(document.getElementById('download-button'));
+        
+        // تحميل الصور من IndexedDB
+        await loadImagesFromDB();
+        
+        if (images.length === 0) {
+            pageView.innerHTML = '<div class="no-images">لا توجد صور. الرجاء العودة للصفحة الرئيسية ورفع صور.</div>';
+            hideShimmer();
+            return;
+        }
+        
+        await displaySidebar();
+        await displayPages();
+        scrollToPage(0);
+
+        pageView.addEventListener('scroll', handleScroll);
+        setTimeout(handleScroll, 100);
+
+        // بدء إنشاء PDF مسبقاً
+        setTimeout(preGeneratePDF, 2000);
+
+        document.getElementById('share-button').addEventListener('click', sharePDF);
+        document.getElementById('download-button').addEventListener('click', downloadPDF);
+        
+        const stopBtn = document.getElementById('stop-bar');
+        if (stopBtn) {
+            stopBtn.addEventListener('click', stopPDF);
+            stopBtn.disabled = true;
+            stopBtn.style.opacity = '0.5';
+        }
+        
+    } catch (error) {
+        console.error('Error initializing viewer:', error);
+        pageView.innerHTML = '<div class="error">حدث خطأ في تحميل الصور</div>';
+        hideShimmer();
     }
-`;
-document.head.appendChild(style);
-
-// =======================================
-// التشغيل
-// =======================================
-displaySavedImages();
-scrollToPage(0);
-
-document.getElementById('share-button').addEventListener('click', sharePDF);
-document.getElementById('download-button').addEventListener('click', downloadPDF);
-});
+})();
+}); 
