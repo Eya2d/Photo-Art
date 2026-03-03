@@ -559,10 +559,13 @@ function getCurrentPageIndex() {
 // التمرير إلى صفحة (معدلة للتحميل المباشر)
 // =======================================
 function scrollToPage(index) {
-    // تحميل الصفحة المستهدفة مباشرة (وهي ستقوم تلقائياً بإزالة الصفحة السابقة)
-    const container = pageContainers[index];
-    if (container) {
-        if (!loadedPages.has(index) || currentVisiblePage !== index) {
+    // التحقق مما إذا كانت الصفحة محملة بالفعل
+    if (loadedPages.has(index)) {
+        console.log(`الصفحة ${index + 1} محملة مسبقاً، سيتم التمرير إليها فقط`);
+    } else {
+        console.log(`تحميل الصفحة ${index + 1} لأول مرة`);
+        const container = pageContainers[index];
+        if (container) {
             const canvas = container.querySelector('canvas');
             loadImageIntoCanvas(canvas, images[index], index);
         }
@@ -576,7 +579,7 @@ function scrollToPage(index) {
     isScrolling = true;
     
     // التمرير إلى الصفحة
-    container.scrollIntoView({
+    pageContainers[index].scrollIntoView({
         behavior: 'smooth',
         block: 'start'
     });
