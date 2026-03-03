@@ -21,9 +21,21 @@ const progressText = document.getElementById('progress-text');
 let stopPDFGeneration = false;
 let isGeneratingPDF = false;
 
-// متغيرات للتحكم في التحميل الديناميكي
+// =======================================
+// متغيرات جديدة للتحكم في التحميل الذكي
+// =======================================
 let loadedPages = new Set();
 let canvasReferences = new Map();
+const PRELOAD_RANGE = 1; // ✅ صفحة واحدة قبل وواحدة بعد فقط
+
+// متغيرات للتحكم في التمرير السريع
+let scrollTimeout = null;
+let lastScrollPosition = 0;
+let scrollDirection = 'down';
+let pendingLoadIndices = new Set();
+let isScrollingFast = false;
+const SCROLL_THRESHOLD = 500; // المسافة بالبكسل للكشف عن التمرير السريع
+const LOAD_DELAY = 150; // تأخير التحميل بالمللي ثانية
 
 // متغير للتخزين المؤقت للـ PDF
 let cachedPDFBlob = null;
@@ -302,6 +314,7 @@ async function displayPages() {
         pageContainers.push(container);
     }
 
+    // تحميل الصفحة الأولى فقط في البداية
     if (images.length > 0) {
         await loadImageIntoCanvas(pageContainers[0].querySelector('canvas'), images[0], 0);
     }
@@ -338,41 +351,141 @@ function isImageWhite(img) {
 }
 
 // =======================================
-// معالجة التمرير
+// دالة جديدة: تحميل الصفحات المعلقة
+// =======================================
+function loadPendingPages() {
+    if (pendingLoadIndices.size === 0) return;
+    
+    // تحويل الـ Set إلى مصفوفة وترتيبها
+    const indicesToLoad = Array.from(pendingLoadIndices).sort((a, b) => a - b);
+    
+    // تحميل كل صفحة معلقة
+    indicesToLoad.forEach(index => {
+        if (!loadedPages.has(index)) {
+            const container = pageContainers[index];
+            const canvas = container.querySelector('canvas');
+            loadImageIntoCanvas(canvas, images[index], index);
+        }
+    });
+    
+    // مسح الصفحات المعلقة
+    pendingLoadIndices.clear();
+}
+
+// =======================================
+// دالة جديدة: تحديد الصفحات المهمة للتحميل (صفحة واحدة فقط)
+// =======================================
+function getImportantPages(currentIndex, fast = false) {
+    const importantPages = new Set();
+    
+    if (fast) {
+        // في حالة التمرير السريع، نحمّل فقط الصفحة الحالية
+        importantPages.add(currentIndex);
+    } else {
+        // في حالة التمرير البطيء، نحمّل صفحة قبل وبعد
+        // ✅ صفحة واحدة قبل
+        if (currentIndex - 1 >= 0) {
+            importantPages.add(currentIndex - 1);
+        }
+        // ✅ الصفحة الحالية
+        importantPages.add(currentIndex);
+        // ✅ صفحة واحدة بعد
+        if (currentIndex + 1 < images.length) {
+            importantPages.add(currentIndex + 1);
+        }
+    }
+    
+    return importantPages;
+}
+
+// =======================================
+// دالة جديدة: تفريغ الصفحات البعيدة
+// =======================================
+function unloadDistantPages(centerIndex) {
+    // ✅ نحتفظ فقط بـ: الصفحة السابقة، الحالية، والتالية
+    const pagesToKeep = new Set();
+    pagesToKeep.add(centerIndex);
+    if (centerIndex - 1 >= 0) pagesToKeep.add(centerIndex - 1);
+    if (centerIndex + 1 < images.length) pagesToKeep.add(centerIndex + 1);
+    
+    // تفريغ أي صفحة ليست في المجموعة
+    loadedPages.forEach((index) => {
+        if (!pagesToKeep.has(index)) {
+            const container = pageContainers[index];
+            const canvas = container.querySelector('canvas');
+            unloadImageFromCanvas(canvas, index);
+        }
+    });
+}
+
+// =======================================
+// معالجة التمرير (معدلة)
 // =======================================
 function handleScroll() {
     const viewportHeight = pageView.clientHeight;
     const scrollTop = pageView.scrollTop;
     
-    const visibleIndices = new Set();
+    // حساب سرعة التمرير
+    const scrollDelta = Math.abs(scrollTop - lastScrollPosition);
+    scrollDirection = scrollTop > lastScrollPosition ? 'down' : 'up';
+    lastScrollPosition = scrollTop;
     
+    // تحديد إذا كان التمرير سريعاً
+    isScrollingFast = scrollDelta > SCROLL_THRESHOLD;
+    
+    // إلغاء التايمر السابق
+    if (scrollTimeout) {
+        clearTimeout(scrollTimeout);
+    }
+    
+    // حساب الصفحات المرئية حالياً
+    const visibleIndices = new Set();
     pageContainers.forEach((container, index) => {
         const containerTop = container.offsetTop;
         const containerBottom = containerTop + container.offsetHeight;
         
         if (containerBottom >= scrollTop && containerTop <= scrollTop + viewportHeight) {
             visibleIndices.add(index);
-            
-            if (index > 0) visibleIndices.add(index - 1);
-            if (index < pageContainers.length - 1) visibleIndices.add(index + 1);
         }
     });
     
-    visibleIndices.forEach(async (index) => {
-        if (!loadedPages.has(index)) {
-            const container = pageContainers[index];
-            const canvas = container.querySelector('canvas');
-            await loadImageIntoCanvas(canvas, images[index], index);
+    // إذا كان هناك صفحات مرئية
+    if (visibleIndices.size > 0) {
+        // أخذ أول صفحة مرئية كمركز
+        const centerIndex = Math.min(...visibleIndices);
+        
+        // الحصول على الصفحات المهمة حسب سرعة التمرير
+        const importantPages = getImportantPages(centerIndex, isScrollingFast);
+        
+        // إضافة الصفحات المهمة إلى قائمة الانتظار
+        importantPages.forEach(index => {
+            if (!loadedPages.has(index)) {
+                pendingLoadIndices.add(index);
+            }
+        });
+        
+        // ✅ تفريغ الصفحات البعيدة (أي صفحة ليست قبل/بعد الصفحة الحالية)
+        unloadDistantPages(centerIndex);
+        
+        // إذا كان التمرير بطيئاً، نحمّل فوراً
+        if (!isScrollingFast) {
+            loadPendingPages();
+        } else {
+            // إذا كان التمرير سريعاً، ننتظر حتى يتوقف ثم نحمّل
+            scrollTimeout = setTimeout(() => {
+                // عند التوقف، نحمّل الصفحة الحالية والتي قبلها وبعدها
+                const finalCenterIndex = Math.min(...visibleIndices);
+                const fullRange = getImportantPages(finalCenterIndex, false);
+                fullRange.forEach(index => {
+                    if (!loadedPages.has(index)) {
+                        pendingLoadIndices.add(index);
+                    }
+                });
+                loadPendingPages();
+                scrollTimeout = null;
+            }, LOAD_DELAY);
         }
-    });
-    
-    loadedPages.forEach((index) => {
-        if (!visibleIndices.has(index)) {
-            const container = pageContainers[index];
-            const canvas = container.querySelector('canvas');
-            unloadImageFromCanvas(canvas, index);
-        }
-    });
+    }
     
     updateSidebarActive(getCurrentPageIndex());
 }
@@ -399,7 +512,7 @@ function getCurrentPageIndex() {
 }
 
 // =======================================
-// التمرير إلى صفحة
+// التمرير إلى صفحة (معدلة)
 // =======================================
 function scrollToPage(index) {
     pageContainers[index].scrollIntoView({
@@ -407,6 +520,30 @@ function scrollToPage(index) {
         block: 'start'
     });
     updateSidebarActive(index);
+    
+    // ✅ تحميل الصفحة المطلوبة والتي قبلها وبعدها فقط
+    setTimeout(() => {
+        // الصفحة السابقة
+        if (index - 1 >= 0 && !loadedPages.has(index - 1)) {
+            const container = pageContainers[index - 1];
+            const canvas = container.querySelector('canvas');
+            loadImageIntoCanvas(canvas, images[index - 1], index - 1);
+        }
+        
+        // الصفحة الحالية
+        if (!loadedPages.has(index)) {
+            const container = pageContainers[index];
+            const canvas = container.querySelector('canvas');
+            loadImageIntoCanvas(canvas, images[index], index);
+        }
+        
+        // الصفحة التالية
+        if (index + 1 < images.length && !loadedPages.has(index + 1)) {
+            const container = pageContainers[index + 1];
+            const canvas = container.querySelector('canvas');
+            loadImageIntoCanvas(canvas, images[index + 1], index + 1);
+        }
+    }, 100);
 }
 
 // =======================================
@@ -731,7 +868,7 @@ async function downloadPDF() {
 }
 
 // =======================================
-// مشاركة PDF (معدلة نهائياً)
+// مشاركة PDF
 // =======================================
 async function sharePDF() {
     // التحقق من أن الزر مفعل
@@ -895,4 +1032,4 @@ async function sharePDF() {
         hideShimmer();
     }
 })();
-}); 
+});
