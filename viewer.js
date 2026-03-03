@@ -864,7 +864,7 @@ async function sharePDF() {
         await loadImagesFromDB();
         
         if (images.length === 0) {
-            pageView.innerHTML = '<div class="no-images">لا توجد صور. الرجاء العودة للصفحة الرئيسية ورفع صور.</div>';
+            pageView.innerHTML = '<div class="no-images">لا توجد صور. الرجاء العودة للصفحة <a href="index.html">الرئيسية</a> ورفع صور.</div>';
             hideShimmer();
             return;
         }
