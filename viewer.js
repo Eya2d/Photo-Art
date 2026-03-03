@@ -559,37 +559,33 @@ function getCurrentPageIndex() {
 // التمرير إلى صفحة (معدلة للتحميل المباشر)
 // =======================================
 function scrollToPage(index) {
-    // التحقق مما إذا كانت الصفحة محملة بالفعل
-    if (loadedPages.has(index)) {
-        console.log(`الصفحة ${index + 1} محملة مسبقاً، سيتم التمرير إليها فقط`);
-    } else {
-        console.log(`تحميل الصفحة ${index + 1} لأول مرة`);
-        const container = pageContainers[index];
-        if (container) {
-            const canvas = container.querySelector('canvas');
-            loadImageIntoCanvas(canvas, images[index], index);
-        }
-    }
-    
-    // إلغاء أي مؤقتات تمرير قائمة
+
+    const container = pageContainers[index];
+    if (!container) return;
+
+    // إلغاء أي مؤقتات تمرير
     clearTimeout(scrollTimeout);
     clearTimeout(touchEndTimeout);
-    
-    // تعطيل معالج التمرير مؤقتاً
+
+    // منع نظام التمرير من العمل أثناء الانتقال
     isScrolling = true;
-    
-    // التمرير إلى الصفحة
-    pageContainers[index].scrollIntoView({
+    isTouching = false;
+
+    // ❌ لا نقوم بتحميل الصورة هنا إطلاقاً
+    // سيتم تحميلها تلقائياً عند توقف التمرير
+
+    container.scrollIntoView({
         behavior: 'smooth',
         block: 'start'
     });
-    
+
     updateSidebarActive(index);
-    
-    // إعادة تفعيل معالج التمرير بعد انتهاء التمرير المتحكم به
+
+    // بعد انتهاء التمرير نسمح للنظام بتحميل الصفحة
     setTimeout(() => {
         isScrolling = false;
-    }, 500);
+        handleScrollEnd(); // هذا سيحمّل الصفحة المركزية فقط
+    }, 400);
 }
 
 // =======================================
