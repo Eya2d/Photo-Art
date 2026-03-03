@@ -9,7 +9,6 @@
 <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
 <!-- Wave & Title effects (保持不变) -->
 <script src="https://cdn.jsdelivr.net/gh/IconCanyon/Icon-canyon@main/Wave-cloud-3.0.0.js"></script>
-<script src="https://cdn.jsdelivr.net/gh/IconCanyon/Icon-canyon@main/Title-Style-1.0.0.js"></script>
 <!-- jsPDF لإنشاء ملف PDF -->
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
@@ -46,6 +45,7 @@ button {
     font-size: 14px;
     display: flex;
     align-items: center;
+    justify-content: center;
     background-color: #0000;
 }
 
@@ -163,6 +163,15 @@ button {
     box-shadow: 0px 3px 7px #55647a61;
 }
 .back ion-icon { font-size: 20px; margin-left: 8px; }
+.back::after {
+    position: absolute;
+    z-index: 5;
+    content: '';
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+}
 
 .menu {
     position: fixed;
@@ -198,8 +207,9 @@ button {
     margin-left: 0 !important;
 }
 
-.menu .flexe button {
+.ss {
     position: relative;
+    cursor: pointer;
     overflow: hidden;
     width: 36px;
     height: 36px;
@@ -209,14 +219,14 @@ button {
     font-size: 24px;
     transition: background-color 0.2s;
 }
-.menu .flexe button:hover {
+.ss:hover {
     background-color: #e0e4e9;
 }
-.menu .flexe button:disabled {
+.ss:disabled {
     opacity: 0.5;
     pointer-events: none;
 }
-.menu .flexe button::before {
+.ss::before {
     position: absolute;
     z-index: 4;
     content: '';
@@ -224,6 +234,64 @@ button {
     height: 100%;
     left: 0;
     top: 0;
+}
+
+
+
+/* -------------------------------------------- */
+
+.progress-container {
+    display: none;
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 300px;
+    background: #f6f8fa;
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.164);
+    z-index: 1000;
+}
+
+.dod {
+    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.dod button {
+    color: #3c4049;
+    opacity: .7 !important;
+}
+.dod button:hover {
+    opacity: 1 !important;
+}
+
+.progress-title {
+    margin-bottom: 5px;
+    text-align: center;
+    font-weight: bold;
+}
+
+.progress-bar-container {
+    width: 100%;
+    background: #f0f0f0;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress-bar {
+    width: 0%;
+    height: 20px;
+    background: #2370ff;
+    transition: width 0.3s;
+}
+
+.progress-text {
+    text-align: center;
+    margin-top: 5px;
+    margin-left: 12px;
 }
 
 
@@ -264,34 +332,125 @@ button {
     }
     .back {
         position: fixed;
+        padding: 0;
+        width: 50px;
+        height: 50px;
+    }
+    .back z {
+        display: none;
+    }
+    .back ion-icon {
+        font-size: 24px !important;
+        margin: 0 !important;
     }
     .page-container:not(:last-child) {
-        margin-bottom: 10px !important;
+        margin-bottom: 5px !important;
     }
 }
+
+
+/* Shimmer (شريط دائري) */
+.global-shimmer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+}
+
+.global-shimmer .spinner {
+    width: 50px;
+    height: 50px;
+    border: 5px solid #f3f3f3;
+    border-top: 5px solid #3498db;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-right: 15px;
+}
+
+.global-shimmer span {
+    color: white;
+    font-size: 18px;
+    font-weight: bold;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* تأثير shimmer على الأزرار */
+.shimmer-loading {
+    position: relative;
+    overflow: hidden;
+}
+
+.shimmer-loading::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, #f6f8fa83, transparent);
+    animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+/* الأزرار المعطلة */
+#share-button:disabled,
+#download-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+
 </style>
 </head>
 <body>
 
 <div class="menu">
     <div class="logo flexe Wave-all-center">
-        <button id="toggleBtn"><ion-icon name="menu-outline"></ion-icon></button>
-        <img src="Image/logo.png" alt=""> Photo Art ( <span title="Display version">View</span> )
+        <button class="ss" id="toggleBtn"><ion-icon name="menu-outline"></ion-icon></button>
+        <img src="Image/logo.png" alt=""> Photo Art ( <span title="نسخة العرض">View</span> )
     </div>
 
     <div class="flexe Wave-all-center">
         <!-- تم إضافة id لتحديد الأزرار -->
-        <button id="share-button" title="Share the file"><ion-icon name="arrow-redo-outline"></ion-icon></button>
-        <button id="download-button" title="Download file"><ion-icon name="arrow-down-circle-outline"></ion-icon></button>
+        <button class="ss" id="share-button" title="مشاركة الكتاب"><ion-icon name="arrow-redo-outline"></ion-icon></button>
+        <button class="ss" id="download-button" title="تحميل الكتاب"><ion-icon name="arrow-down-circle-outline"></ion-icon></button>
     </div>
 </div>
 
 <div class="flex">
     <div id="sidebar"></div>
-    <div id="page-view"></div>
+    <div id="page-view" class="zoome"></div>
 </div>
 
-<a href="index.html"><button class="back Wave-cloud">Going back <ion-icon name="arrow-forward-outline"></ion-icon></button></a>
+<a href="index.html"><button class="back Wave-cloud"><z>Going back</z> <ion-icon name="arrow-forward-outline"></ion-icon></button></a>
+
+
+<!-- مؤشر التحميل -->
+<div id="progress-container" class="progress-container">
+    <div class="progress-title">جاري إنشاء PDF...</div>
+    <div class="progress-bar-container">
+        <div id="progress-bar" class="progress-bar"></div>
+    </div>
+    <div class="dod Wave-all-center">
+        <div id="progress-text" class="progress-text">0%</div>
+        <button class="ss" id="stop-bar" title="Stop"><ion-icon name="stop"></ion-icon></button>
+    </div>
+</div>
 
 
 <script>
@@ -553,6 +712,7 @@ setTimeout(() => {
 </script>
 
 <script src="viewer.js"></script>
+<script src="title.js"></script>
 
 <script src="zoom.js"></script>
 
