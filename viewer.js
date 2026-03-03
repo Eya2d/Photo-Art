@@ -563,16 +563,14 @@ function scrollToPage(index) {
     const container = pageContainers[index];
     if (!container) return;
 
-    // إلغاء أي مؤقتات تمرير
     clearTimeout(scrollTimeout);
     clearTimeout(touchEndTimeout);
 
-    // منع نظام التمرير من العمل أثناء الانتقال
     isScrolling = true;
     isTouching = false;
 
-    // ❌ لا نقوم بتحميل الصورة هنا إطلاقاً
-    // سيتم تحميلها تلقائياً عند توقف التمرير
+    let lastScrollTop = pageView.scrollTop;
+    let stableCount = 0;
 
     container.scrollIntoView({
         behavior: 'smooth',
@@ -581,11 +579,35 @@ function scrollToPage(index) {
 
     updateSidebarActive(index);
 
-    // بعد انتهاء التمرير نسمح للنظام بتحميل الصفحة
-    setTimeout(() => {
-        isScrolling = false;
-        handleScrollEnd(); // هذا سيحمّل الصفحة المركزية فقط
-    }, 400);
+    // مراقبة استقرار التمرير فعلياً
+    function detectScrollStop() {
+        const currentScrollTop = pageView.scrollTop;
+
+        if (Math.abs(currentScrollTop - lastScrollTop) < 2) {
+            stableCount++;
+        } else {
+            stableCount = 0;
+        }
+
+        lastScrollTop = currentScrollTop;
+
+        // إذا بقي التمرير ثابت 3 إطارات متتالية نعتبره انتهى
+        if (stableCount >= 3) {
+            isScrolling = false;
+
+            // تحميل الصفحة المطلوبة مباشرة إذا لم تكن محمّلة
+            if (!loadedPages.has(index) || currentVisiblePage !== index) {
+                const canvas = container.querySelector('canvas');
+                loadImageIntoCanvas(canvas, images[index], index);
+            }
+
+            return;
+        }
+
+        requestAnimationFrame(detectScrollStop);
+    }
+
+    requestAnimationFrame(detectScrollStop);
 }
 
 // =======================================
