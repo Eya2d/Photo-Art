@@ -34,6 +34,8 @@ let isTouching = false;
 let lastScrollTop = 0;
 let scrollDirection = 'down';
 let fastScrollCount = 0;
+let lastScrollPosition = 0;
+let scrollStopDetected = false;
 
 // متغير للتخزين المؤقت للـ PDF
 let cachedPDFBlob = null;
@@ -367,7 +369,7 @@ function isImageWhite(img) {
 }
 
 // =======================================
-// معالجة التمرير (معدلة للتمرير السريع)
+// معالجة التمرير (معدلة للتمرير السريع مع كشف التوقف)
 // =======================================
 function handleScroll() {
     const currentScrollTop = pageView.scrollTop;
@@ -382,7 +384,19 @@ function handleScroll() {
     // منع التحميل أثناء التمرير
     if (!isScrolling) {
         isScrolling = true;
+        scrollStopDetected = false;
     }
+    
+    // التحقق من توقف التمرير
+    if (Math.abs(currentScrollTop - lastScrollPosition) < 5) {
+        // إذا كان التمرير بطيئاً جداً أو متوقفاً
+        if (!scrollStopDetected) {
+            scrollStopDetected = true;
+            // تحميل الصفحة الحالية فوراً إذا كان التمرير بطيئاً
+            loadCurrentPage();
+        }
+    }
+    lastScrollPosition = currentScrollTop;
     
     // إعادة تعيين المؤقت في كل مرة يتحرك فيها المستخدم
     clearTimeout(scrollTimeout);
@@ -394,10 +408,25 @@ function handleScroll() {
         if (!isTouching) {
             handleScrollEnd();
         }
-    }, 150);
+    }, 100); // تقليل الوقت إلى 100ms للاستجابة الأسرع
     
     // تحديث العنصر النشط أثناء التمرير (بدون تحميل)
     updateSidebarActive(getCurrentPageIndex());
+}
+
+// =======================================
+// تحميل الصفحة الحالية (دالة جديدة)
+// =======================================
+function loadCurrentPage() {
+    const centerIndex = getCenterPageIndex();
+    if (centerIndex >= 0 && centerIndex < images.length) {
+        if (!loadedPages.has(centerIndex) || currentVisiblePage !== centerIndex) {
+            console.log(`تحميل الصفحة ${centerIndex + 1} فور توقف التمرير`);
+            const container = pageContainers[centerIndex];
+            const canvas = container.querySelector('canvas');
+            loadImageIntoCanvas(canvas, images[centerIndex], centerIndex);
+        }
+    }
 }
 
 // =======================================
@@ -407,13 +436,26 @@ function handleTouchStart() {
     isTouching = true;
     isScrolling = true;
     fastScrollCount = 0;
+    scrollStopDetected = false;
 }
 
 // =======================================
-// معالجة نهاية اللمس
+// معالجة حركة اللمس (مضافة جديدة)
+// =======================================
+function handleTouchMove() {
+    // إعادة تعيين مؤقت التوقف
+    clearTimeout(touchEndTimeout);
+    scrollStopDetected = false;
+}
+
+// =======================================
+// معالجة نهاية اللمس (محدثة)
 // =======================================
 function handleTouchEnd() {
     isTouching = false;
+    
+    // تحميل الصفحة الحالية فور رفع اللمس
+    loadCurrentPage();
     
     // انتظر قليلاً للتأكد من أن المستخدم لا يزال في نفس المكان
     touchEndTimeout = setTimeout(() => {
@@ -425,9 +467,9 @@ function handleTouchEnd() {
                 if (!isScrolling && !isTouching) {
                     handleScrollEnd();
                 }
-            }, 100);
+            }, 50);
         }
-    }, 200);
+    }, 100);
 }
 
 // =======================================
@@ -480,24 +522,16 @@ function handleScrollEnd() {
         console.log('تمرير سريع detected, تحميل الصفحة المركزية فقط');
     }
     
-    // الحصول على الصفحة المركزية في الشاشة
-    const centerIndex = getCenterPageIndex();
-    
-    // تحميل الصفحة المركزية فقط (وهي ستقوم تلقائياً بإزالة الصفحة السابقة)
-    if (centerIndex >= 0 && centerIndex < images.length) {
-        if (!loadedPages.has(centerIndex) || currentVisiblePage !== centerIndex) {
-            const container = pageContainers[centerIndex];
-            const canvas = container.querySelector('canvas');
-            loadImageIntoCanvas(canvas, images[centerIndex], centerIndex);
-        }
-    }
+    // تحميل الصفحة المركزية
+    loadCurrentPage();
     
     // إعادة تعيين المتغيرات
     isScrolling = false;
     fastScrollCount = 0;
+    scrollStopDetected = false;
     
     // تحديث العنصر النشط
-    updateSidebarActive(centerIndex);
+    updateSidebarActive(getCenterPageIndex());
 }
 
 // =======================================
@@ -996,7 +1030,7 @@ async function sharePDF() {
 }
 
 // =======================================
-// تشغيل التطبيق (معدل مع إضافة مستمعات اللمس)
+// تشغيل التطبيق (معدل مع إضافة مستمعات اللمس المحسنة)
 // =======================================
 (async () => {
     try {
@@ -1020,19 +1054,31 @@ async function sharePDF() {
         await displayPages();
         scrollToPage(0);
 
-        // إضافة مستمعات التمرير واللمس
+        // إضافة مستمعات التمرير واللمس المحسنة
         pageView.addEventListener('scroll', handleScroll);
         pageView.addEventListener('touchstart', handleTouchStart);
+        pageView.addEventListener('touchmove', handleTouchMove);
         pageView.addEventListener('touchend', handleTouchEnd);
         
         // مستمعات إضافية للموس
         pageView.addEventListener('mousedown', () => {
             isTouching = true;
             isScrolling = true;
+            scrollStopDetected = false;
+        });
+        
+        pageView.addEventListener('mousemove', () => {
+            if (isTouching) {
+                // إعادة تعيين مؤقت التوقف أثناء حركة الماوس
+                clearTimeout(scrollTimeout);
+                scrollStopDetected = false;
+            }
         });
         
         pageView.addEventListener('mouseup', () => {
             isTouching = false;
+            // تحميل الصفحة الحالية فور رفع الماوس
+            loadCurrentPage();
             setTimeout(() => {
                 if (!isScrolling) {
                     handleScrollEnd();
@@ -1043,8 +1089,15 @@ async function sharePDF() {
         pageView.addEventListener('mouseleave', () => {
             if (isTouching) {
                 isTouching = false;
+                loadCurrentPage();
                 handleScrollEnd();
             }
+        });
+        
+        // مستمع لعجلة الماوس للكشف عن التمرير السريع
+        pageView.addEventListener('wheel', () => {
+            clearTimeout(scrollTimeout);
+            scrollStopDetected = false;
         });
         
         setTimeout(handleScroll, 100);
