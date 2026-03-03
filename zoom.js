@@ -1,6 +1,8 @@
 (function () {
 
-  /* منع زوم المتصفح */
+  /* ============================
+     منع زوم المتصفح
+  ============================ */
   document.addEventListener('wheel', function (e) {
     if (e.ctrlKey) e.preventDefault();
   }, { passive: false });
@@ -14,8 +16,16 @@
     }
   });
 
-  /* ===================================== */
+  /* منع pinch لتكبير الموقع بالكامل */
+  document.addEventListener('touchmove', function (e) {
+    if (e.touches.length > 1) {
+      e.preventDefault();
+    }
+  }, { passive: false });
 
+  /* ============================
+     Zoom حقيقي داخل .zoome فقط
+  ============================ */
   document.querySelectorAll('.zoome').forEach(wrapper => {
 
     let scale = 1;
@@ -31,6 +41,7 @@
 
       const prevScale = scale;
 
+      // زيادة أو نقصان المقياس
       if (e.deltaY < 0) {
         scale += 0.1;
       } else {
@@ -39,15 +50,15 @@
 
       scale = Math.min(Math.max(minScale, scale), maxScale);
 
-      /* نحسب مكان الماوس داخل الديف */
+      // موقع الماوس داخل الديف
       const rect = wrapper.getBoundingClientRect();
       const offsetX = e.clientX - rect.left + wrapper.scrollLeft;
       const offsetY = e.clientY - rect.top + wrapper.scrollTop;
 
-      /* تكبير حقيقي */
-      wrapper.style.zoom = scale;   // يعمل جيداً في Chrome
+      // تكبير حقيقي (zoom يدعم scroll)
+      wrapper.style.zoom = scale;
 
-      /* الحفاظ على مكان الماوس بعد التكبير */
+      // الحفاظ على مكان الماوس بعد التكبير
       wrapper.scrollLeft = (offsetX * scale / prevScale) - (e.clientX - rect.left);
       wrapper.scrollTop  = (offsetY * scale / prevScale) - (e.clientY - rect.top);
 
