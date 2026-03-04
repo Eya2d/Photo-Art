@@ -585,7 +585,7 @@ function scrollToPage(index) {
     setTimeout(() => {
         isScrolling = false;
         handleScrollEnd(); // هذا سيحمّل الصفحة المركزية فقط
-    }, 400);
+    }, 0);
 }
 
 // =======================================
