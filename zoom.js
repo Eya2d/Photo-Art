@@ -46,7 +46,7 @@
 
 window.onload = function() {
     // قائمة العناصر المستهدفة
-    const targetElements = 'div, a, button, input, select';
+    const targetElements = 'div, a, button, input, select, img';
 
     // تخزين الـ cursor الأصلي لكل عنصر
     const originalCursors = new WeakMap();
