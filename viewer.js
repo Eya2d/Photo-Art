@@ -408,7 +408,7 @@ function handleScroll() {
         if (!isTouching) {
             handleScrollEnd();
         }
-    }, 5); // تقليل الوقت إلى 100ms للاستجابة الأسرع
+    }, 10); // تقليل الوقت إلى 100ms للاستجابة الأسرع
     
     // تحديث العنصر النشط أثناء التمرير (بدون تحميل)
     updateSidebarActive(getCurrentPageIndex());
@@ -585,7 +585,7 @@ function scrollToPage(index) {
     setTimeout(() => {
         isScrolling = false;
         handleScrollEnd(); // هذا سيحمّل الصفحة المركزية فقط
-    }, 5);
+    }, 10);
 }
 
 // =======================================
