@@ -115,7 +115,7 @@ button {
 button {
     padding: 10px 20px;
     padding-right: 17px;
-    margin: 20px;
+    margin: 20px 14px;
     border: solid 1px #ccc;
     border-radius: 25px;
     background: white;
@@ -204,347 +204,541 @@ button {
 
 <script>
 // إضافة مكتبة idb (اختياري) ولكن سنستخدم IndexedDB مباشرة
-const dropArea = document.getElementById('drop-area');
-const fileElem = document.getElementById('fileElem');
-const gallery = document.getElementById('gallery');
-let images = [];
-let dragIndex = null;
+        const dropArea = document.getElementById('drop-area');
+        const fileElem = document.getElementById('fileElem');
+        const gallery = document.getElementById('gallery');
+        let images = [];
+        let dragIndex = null;
 
-// عناصر شريط التحميل
-const progressContainer = document.getElementById('progress-container');
-const progressBar = document.getElementById('progress-bar');
+        // عناصر شريط التحميل
+        const progressContainer = document.getElementById('progress-container');
+        const progressBar = document.getElementById('progress-bar');
 
-// إعدادات السكرول التلقائي
-const scrollEdge = 80;
-const scrollSpeed = 15;
-let autoScrollInterval = null;
+        // إعدادات السكرول التلقائي
+        const scrollEdge = 80;
+        const scrollSpeed = 15;
+        let autoScrollInterval = null;
 
-// متغيرات IndexedDB
-const DB_NAME = 'ImageGalleryDB';
-const DB_VERSION = 1;
-const STORE_NAME = 'images';
+        // متغيرات IndexedDB
+        const DB_NAME = 'ImageGalleryDB';
+        const DB_VERSION = 1;
+        const STORE_NAME = 'images';
 
-// فتح قاعدة البيانات
-let db;
+        // فتح قاعدة البيانات
+        let db;
 
-// تهيئة IndexedDB
-function initDB() {
-    return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, DB_VERSION);
-        
-        request.onerror = (event) => {
-            console.error('Database error:', event.target.error);
-            reject('Error opening database');
-        };
-        
-        request.onsuccess = (event) => {
-            db = event.target.result;
-            console.log('Database opened successfully');
-            resolve(db);
-        };
-        
-        request.onupgradeneeded = (event) => {
-            const db = event.target.result;
-            if (!db.objectStoreNames.contains(STORE_NAME)) {
-                const store = db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
-                store.createIndex('order', 'order', { unique: false });
-                console.log('Object store created');
-            }
-        };
-    });
-}
-
-// تحميل الصور من IndexedDB عند بدء الصفحة
-async function loadImagesFromDB() {
-    try {
-        if (!db) await initDB();
-        const transaction = db.transaction([STORE_NAME], 'readonly');
-        const store = transaction.objectStore(STORE_NAME);
-        const index = store.index('order');
-        const request = index.getAll();
-        
-        return new Promise((resolve, reject) => {
-            request.onsuccess = () => {
-                const items = request.result;
-                items.sort((a, b) => a.order - b.order);
-                images = items.map(item => item.dataURL);
-                resolve(images);
-            };
-            request.onerror = () => reject('Error loading images');
-        });
-    } catch (error) {
-        console.error('Error loading from DB:', error);
-        images = [];
-    }
-}
-
-// حفظ الصور في IndexedDB
-async function saveImagesToDB(imageArray) {
-    try {
-        if (!db) await initDB();
-        const transaction = db.transaction([STORE_NAME], 'readwrite');
-        const store = transaction.objectStore(STORE_NAME);
-        store.clear();
-        imageArray.forEach((dataURL, index) => {
-            store.add({ dataURL: dataURL, order: index, timestamp: Date.now() });
-        });
-        return new Promise((resolve, reject) => {
-            transaction.oncomplete = () => resolve();
-            transaction.onerror = () => reject('Error saving images');
-        });
-    } catch (error) {
-        console.error('Error saving to DB:', error);
-    }
-}
-
-// دالة لإزالة جميع الصور
-async function clearAllImages() {
-    if (images.length === 0) { alert('لا توجد صور لحذفها'); return; }
-    if (!confirm('هل أنت متأكد من حذف جميع الصور؟')) return;
-
-    try {
-        progressContainer.style.display = 'block';
-        progressBar.style.width = '50%';
-        images = [];
-
-        if (db) {
-            const transaction = db.transaction([STORE_NAME], 'readwrite');
-            const store = transaction.objectStore(STORE_NAME);
-            store.clear();
-            await new Promise((resolve, reject) => {
-                transaction.oncomplete = resolve;
-                transaction.onerror = reject;
+        // تهيئة IndexedDB
+        function initDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
+                
+                request.onerror = (event) => {
+                    console.error('Database error:', event.target.error);
+                    reject('Error opening database');
+                };
+                
+                request.onsuccess = (event) => {
+                    db = event.target.result;
+                    console.log('Database opened successfully');
+                    resolve(db);
+                };
+                
+                request.onupgradeneeded = (event) => {
+                    const db = event.target.result;
+                    
+                    // إنشاء مخزن للصور إذا لم يكن موجوداً
+                    if (!db.objectStoreNames.contains(STORE_NAME)) {
+                        const store = db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
+                        store.createIndex('order', 'order', { unique: false });
+                        console.log('Object store created');
+                    }
+                };
             });
         }
 
-        progressBar.style.width = '100%';
-        displayGallery();
-        setTimeout(() => {
-            progressContainer.style.display = 'none';
-            progressBar.style.width = '0%';
-        }, 500);
-        alert('تم حذف جميع الصور بنجاح');
-
-    } catch (error) {
-        console.error(error);
-        alert('حدث خطأ أثناء حذف الصور');
-        progressContainer.style.display = 'none';
-    }
-}
-
-// دالة حذف صورة واحدة
-async function deleteSingleImage(index) {
-    if (!confirm('هل أنت متأكد من حذف هذه الصورة؟')) return;
-    try {
-        images.splice(index, 1);
-        await saveImagesToDB(images);
-        displayGallery();
-    } catch (error) {
-        console.error(error);
-        alert('حدث خطأ أثناء حذف الصورة');
-    }
-}
-
-// فتح اختيار الملفات
-dropArea.addEventListener('click', () => fileElem.click());
-
-// Handle file selection
-fileElem.addEventListener('change', (e) => handleFiles(e.target.files));
-
-// Drag & drop upload
-dropArea.addEventListener('dragover', (e) => { e.preventDefault(); dropArea.classList.add('hover'); });
-dropArea.addEventListener('dragleave', () => dropArea.classList.remove('hover'));
-dropArea.addEventListener('drop', (e) => {
-    e.preventDefault();
-    dropArea.classList.remove('hover');
-    handleFiles(e.dataTransfer.files);
-});
-
-// قراءة الملفات مع شريط التحميل
-function readFileAsDataURL(file, onProgress) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onerror = () => reject("فشل قراءة الملف: " + file.name);
-        reader.onprogress = (e) => {
-            if (e.lengthComputable && onProgress) {
-                onProgress((e.loaded / e.total) * 100);
+        // تحميل الصور من IndexedDB عند بدء الصفحة
+        async function loadImagesFromDB() {
+            try {
+                if (!db) await initDB();
+                
+                const transaction = db.transaction([STORE_NAME], 'readonly');
+                const store = transaction.objectStore(STORE_NAME);
+                const index = store.index('order');
+                const request = index.getAll();
+                
+                return new Promise((resolve, reject) => {
+                    request.onsuccess = () => {
+                        const items = request.result;
+                        // ترتيب حسب order
+                        items.sort((a, b) => a.order - b.order);
+                        images = items.map(item => item.dataURL);
+                        resolve(images);
+                    };
+                    
+                    request.onerror = () => {
+                        reject('Error loading images');
+                    };
+                });
+            } catch (error) {
+                console.error('Error loading from DB:', error);
+                images = [];
             }
-        };
-        reader.onload = (e) => {
-            if (!e.target.result) reject("ملف فارغ أو غير صالح");
-            else resolve(e.target.result);
-        };
-        reader.readAsDataURL(file);
-    });
-}
-
-// معالجة الملفات بدون فقدان الصور + عرض دفعات
-async function handleFiles(files) {
-    const fileArray = Array.from(files).filter(file => file.type.startsWith('image/'));
-    if (fileArray.length === 0) return;
-
-    progressContainer.style.display = 'block';
-    progressBar.style.width = '0%';
-
-    let loadedImages = [];
-
-    try {
-        // قراءة جميع الصور بالتوازي
-        const readPromises = fileArray.map((file, idx) => 
-            readFileAsDataURL(file, (percent) => {
-                progressBar.style.width = ((idx + percent / 100) / fileArray.length) * 100 + '%';
-            })
-        );
-
-        loadedImages = await Promise.all(readPromises);
-
-        if (loadedImages.length !== fileArray.length) {
-            throw new Error("بعض الصور لم يتم تحميلها بالكامل");
         }
 
-        images = images.concat(loadedImages);
+        // حفظ الصور في IndexedDB
+        async function saveImagesToDB(imageArray) {
+            try {
+                if (!db) await initDB();
+                
+                const transaction = db.transaction([STORE_NAME], 'readwrite');
+                const store = transaction.objectStore(STORE_NAME);
+                
+                // مسح جميع الصور القديمة
+                store.clear();
+                
+                // إضافة الصور الجديدة مع ترتيبها
+                imageArray.forEach((dataURL, index) => {
+                    store.add({
+                        dataURL: dataURL,
+                        order: index,
+                        timestamp: Date.now()
+                    });
+                });
+                
+                return new Promise((resolve, reject) => {
+                    transaction.oncomplete = () => {
+                        console.log('All images saved to DB');
+                        resolve();
+                    };
+                    
+                    transaction.onerror = () => {
+                        reject('Error saving images');
+                    };
+                });
+            } catch (error) {
+                console.error('Error saving to DB:', error);
+            }
+        }
 
-        await saveImagesToDB(images);
+        // دالة لإزالة جميع الصور المحفوظة
+        async function clearAllImages() {
+            // التحقق من وجود صور
+            if (images.length === 0) {
+                alert('لا توجد صور لحذفها');
+                return;
+            }
+            
+            // طلب تأكيد من المستخدم
+            const confirmDelete = confirm('هل أنت متأكد من حذف جميع الصور؟');
+            if (!confirmDelete) return;
+            
+            try {
+                // إظهار مؤشر التحميل
+                progressContainer.style.display = 'block';
+                progressBar.style.width = '50%';
+                
+                // مسح المصفوفة
+                images = [];
+                
+                // مسح قاعدة البيانات
+                if (db) {
+                    const transaction = db.transaction([STORE_NAME], 'readwrite');
+                    const store = transaction.objectStore(STORE_NAME);
+                    store.clear();
+                    
+                    await new Promise((resolve, reject) => {
+                        transaction.oncomplete = () => {
+                            console.log('All images cleared from DB');
+                            resolve();
+                        };
+                        
+                        transaction.onerror = () => {
+                            console.error('Error clearing DB');
+                            reject('Error clearing database');
+                        };
+                    });
+                }
+                
+                // تحديث شريط التحميل
+                progressBar.style.width = '100%';
+                
+                // تحديث المعرض
+                displayGallery();
+                
+                // إخفاء شريط التحميل بعد قليل
+                setTimeout(() => {
+                    progressContainer.style.display = 'none';
+                    progressBar.style.width = '0%';
+                }, 500);
+                
+            } catch (error) {
+                console.error('Error clearing images:', error);
+                alert('حدث خطأ أثناء حذف الصور');
+                progressContainer.style.display = 'none';
+            }
+        }
 
-        // عرض الصور داخل الديف دفعات 1ms لكل صورة
-        await displayGalleryInBatches();
+        // دالة لحذف صورة واحدة
+        async function deleteSingleImage(index) {
+            const confirmDelete = confirm('هل أنت متأكد من حذف هذه الصورة؟');
+            if (!confirmDelete) return;
+            
+            try {
+                // إزالة الصورة من المصفوفة
+                images.splice(index, 1);
+                
+                // حفظ التغييرات في قاعدة البيانات
+                await saveImagesToDB(images);
+                
+                // تحديث المعرض
+                displayGallery();
+                
+            } catch (error) {
+                console.error('Error deleting image:', error);
+                alert('حدث خطأ أثناء حذف الصورة');
+            }
+        }
 
-    } catch (error) {
-        console.error(error);
-        alert("حدث خطأ أثناء تحميل بعض الصور، يرجى المحاولة مرة أخرى.");
-    }
+        // Open file selector on click
+        dropArea.addEventListener('click', (e) => {
+            if (e.target.classList.contains('delete-btn')) return;
+            fileElem.click();
+        });
 
-    setTimeout(() => { progressContainer.style.display = 'none'; progressBar.style.width = '0%'; }, 400);
-}
+        // Handle file selection
+        fileElem.addEventListener('change', (e) => handleFiles(e.target.files));
 
-// عرض الصور دفعات 1ms
-async function displayGalleryInBatches() {
-    gallery.innerHTML = '';
-    for (let index = 0; index < images.length; index++) {
-        const src = images[index];
+        // Drag & drop upload
+        dropArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropArea.classList.add('hover');
+        });
 
-        const wrapper = document.createElement('div');
-        wrapper.className = 'thumb';
-        wrapper.draggable = true;
-        wrapper.dataset.index = index;
+        dropArea.addEventListener('dragleave', () => dropArea.classList.remove('hover'));
 
-        const img = document.createElement('img');
-        img.src = src;
-        img.draggable = false;
-        img.addEventListener('contextmenu', (e) => e.preventDefault());
+        dropArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropArea.classList.remove('hover');
+            handleFiles(e.dataTransfer.files);
+        });
 
-        const label = document.createElement('span');
-        label.textContent = index + 1;
-        label.className = 'img-number';
+        // قراءة الملفات مع عرض شريط التحميل
+        function readFileAsDataURL(file, onProgress) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
 
-        const deleteBtn = document.createElement('button');
-        deleteBtn.textContent = '×';
-        deleteBtn.className = 'delete-btn';
-        deleteBtn.setAttribute('aria-label', 'حذف الصورة');
-        deleteBtn.onclick = (e) => { e.stopPropagation(); e.preventDefault(); deleteSingleImage(index); };
+                reader.onprogress = (e) => {
+                    if (e.lengthComputable) {
+                        const percent = (e.loaded / e.total) * 100;
+                        onProgress(percent);
+                    }
+                };
 
-        wrapper.appendChild(img);
-        wrapper.appendChild(label);
-        wrapper.appendChild(deleteBtn);
-        gallery.appendChild(wrapper);
+                reader.onloadstart = () => {
+                    progressContainer.style.display = 'block';
+                    progressBar.style.width = '0%';
+                };
 
-        setupDragAndTouch(wrapper, deleteBtn, index);
+                reader.onload = (e) => {
+                    progressBar.style.width = '100%';
+                    setTimeout(() => {
+                        progressContainer.style.display = 'none';
+                    }, 300);
+                    resolve(e.target.result);
+                };
 
-        await new Promise(r => setTimeout(r, 1)); // تأخير 1 ملي ثانية بين كل صورة
-    }
+                reader.readAsDataURL(file);
+            });
+        }
 
-    const clearBtn = document.getElementById('clearBtn');
-    if (clearBtn) clearBtn.style.display = images.length > 0 ? 'inline-block' : 'none';
-}
+        // Process files
+        async function handleFiles(files) {
+            const fileArray = Array.from(files).filter(file => file.type.startsWith('image/'));
+            
+            // تحديث شريط التحميل الكلي
+            let processedCount = 0;
+            const totalFiles = fileArray.length;
 
-// إعداد السحب والإفلات واللمس لكل صورة
-function setupDragAndTouch(wrapper, deleteBtn, index) {
-    // Drag بالماوس
-    wrapper.addEventListener('dragstart', (e) => {
-        if (e.target === deleteBtn) { e.preventDefault(); return; }
-        dragIndex = index; wrapper.classList.add('dragging');
-    });
-    wrapper.addEventListener('dragend', () => { wrapper.classList.remove('dragging'); removeAllDragOver(); });
-    wrapper.addEventListener('dragover', (e) => { e.preventDefault(); if (dragIndex === index) return; removeAllDragOver(); wrapper.classList.add('drag-over'); });
-    wrapper.addEventListener('dragleave', () => wrapper.classList.remove('drag-over'));
-    wrapper.addEventListener('drop', async (e) => {
-        e.preventDefault();
-        const dropIndex = index;
-        if (dragIndex === null || dragIndex === dropIndex) return;
-        const movedItem = images.splice(dragIndex, 1)[0];
-        images.splice(dropIndex, 0, movedItem);
-        dragIndex = null;
-        await saveImagesToDB(images);
-        await displayGalleryInBatches();
-    });
+            for (let i = 0; i < fileArray.length; i++) {
+                const dataURL = await readFileAsDataURL(fileArray[i], (percent) => {
+                    // تحديث التقدم للصورة الحالية
+                    progressBar.style.width = percent + '%';
+                });
+                
+                images.push(dataURL);
+                processedCount++;
+                
+                // تحديث شريط التحميل الكلي
+                const totalProgress = (processedCount / totalFiles) * 100;
+                progressBar.style.width = totalProgress + '%';
+            }
 
-    // Drag باللمس + Auto Scroll
-    wrapper.addEventListener('touchstart', (e) => { if (e.target === deleteBtn) { e.preventDefault(); return; } dragIndex = index; wrapper.classList.add('dragging'); }, { passive: true });
-    wrapper.addEventListener('touchmove', (e) => {
-        e.preventDefault();
-        const touch = e.touches[0]; handleAutoScroll(touch.clientY);
-        const element = document.elementFromPoint(touch.clientX, touch.clientY);
-        if (!element) return;
-        const target = element.closest('.thumb'); if (!target) return;
-        const overIndex = Number(target.dataset.index); if (overIndex === dragIndex) return;
-        removeAllDragOver(); target.classList.add('drag-over');
-    }, { passive: false });
-    wrapper.addEventListener('touchend', async (e) => {
-        stopAutoScroll();
-        const touch = e.changedTouches[0];
-        const element = document.elementFromPoint(touch.clientX, touch.clientY);
-        wrapper.classList.remove('dragging'); removeAllDragOver();
-        if (!element) { dragIndex = null; return; }
-        const target = element.closest('.thumb'); if (!target) { dragIndex = null; return; }
-        const dropIndex = Number(target.dataset.index);
-        if (dragIndex !== null && dragIndex !== dropIndex) {
-            const movedItem = images.splice(dragIndex, 1)[0];
-            images.splice(dropIndex, 0, movedItem);
+            // حفظ الصور في IndexedDB
             await saveImagesToDB(images);
-            await displayGalleryInBatches();
+            displayGallery();
         }
-        dragIndex = null;
-    });
-}
 
-// إزالة تأثير hover
-function removeAllDragOver() {
-    document.querySelectorAll('.thumb.drag-over').forEach(el => el.classList.remove('drag-over'));
-}
+        // إزالة تأثير hover من جميع الصور
+        function removeAllDragOver() {
+            document.querySelectorAll('.thumb.drag-over')
+                .forEach(el => el.classList.remove('drag-over'));
+        }
 
-// التحكم في السكرول التلقائي
-function handleAutoScroll(touchY) {
-    const viewportHeight = window.innerHeight;
-    if (touchY < scrollEdge) startAutoScroll(-scrollSpeed);
-    else if (touchY > viewportHeight - scrollEdge) startAutoScroll(scrollSpeed);
-    else stopAutoScroll();
-}
-function startAutoScroll(speed) {
-    if (autoScrollInterval) return;
-    autoScrollInterval = setInterval(() => { window.scrollBy(0, speed); }, 16);
-}
-function stopAutoScroll() { clearInterval(autoScrollInterval); autoScrollInterval = null; }
+        // التحكم في السكرول التلقائي
+        function handleAutoScroll(touchY) {
+            const viewportHeight = window.innerHeight;
 
-// إرسال الصور للصفحة الأخرى
-document.getElementById('viewBtn').addEventListener('click', async () => {
-    if (images.length === 0) { alert('Please upload images first'); return; }
-    try {
-        await saveImagesToDB(images);
-        sessionStorage.setItem('imagesReady', 'true');
-        sessionStorage.setItem('imageCount', images.length);
-        window.location.href = 'viewer.html';
-    } catch (error) {
-        console.error(error);
-        alert('Error saving images. Please try again.');
-    }
-});
+            if (touchY < scrollEdge) {
+                startAutoScroll(-scrollSpeed);
+            } else if (touchY > viewportHeight - scrollEdge) {
+                startAutoScroll(scrollSpeed);
+            } else {
+                stopAutoScroll();
+            }
+        }
 
-// زر المسح
-const clearBtn = document.getElementById('clearBtn');
-if (clearBtn) clearBtn.addEventListener('click', clearAllImages);
+        function startAutoScroll(speed) {
+            if (autoScrollInterval) return;
 
-// تهيئة الصفحة
-window.addEventListener('load', async () => { await initDB(); await loadImagesFromDB(); await displayGalleryInBatches(); });
+            autoScrollInterval = setInterval(() => {
+                window.scrollBy(0, speed);
+            }, 16);
+        }
+
+        function stopAutoScroll() {
+            clearInterval(autoScrollInterval);
+            autoScrollInterval = null;
+        }
+
+        // عرض الصور مع تأثير الظهور بالدفعات
+        async function displayGallery() {
+            // إظهار رسالة فارغة إذا لم تكن هناك صور
+            if (images.length === 0) {
+                gallery.innerHTML = '<div class="empty-message">✨ قم برفع الصور لعرضها هنا</div>';
+                
+                // إخفاء زر المسح
+                const clearBtn = document.getElementById('clearBtn');
+                if (clearBtn) {
+                    clearBtn.style.display = 'none';
+                }
+                return;
+            }
+
+            // إظهار زر المسح
+            const clearBtn = document.getElementById('clearBtn');
+            if (clearBtn) {
+                clearBtn.style.display = 'inline-block';
+            }
+
+            // مسح محتوى المعرض
+            gallery.innerHTML = '';
+
+            // عرض الصور بدفعات مع تأخير 1 ملي ثانية بين كل صورة
+            for (let index = 0; index < images.length; index++) {
+                const src = images[index];
+                
+                // إنشاء عنصر الصورة
+                const wrapper = document.createElement('div');
+                wrapper.className = 'thumb';
+                wrapper.draggable = true;
+                wrapper.dataset.index = index;
+
+                const img = document.createElement('img');
+                img.src = src;
+                img.alt = `صورة ${index + 1}`;
+                img.draggable = false;
+                img.loading = 'lazy'; // تحميل كسول للصور
+
+                img.addEventListener('contextmenu', (e) => e.preventDefault());
+
+                const label = document.createElement('span');
+                label.textContent = index + 1;
+                label.className = 'img-number';
+
+                // إضافة زر حذف للصورة
+                const deleteBtn = document.createElement('button');
+                deleteBtn.textContent = '×';
+                deleteBtn.className = 'delete-btn';
+                deleteBtn.setAttribute('aria-label', 'حذف الصورة');
+                deleteBtn.onclick = (e) => {
+                    e.stopPropagation(); // منع تفعيل السحب
+                    e.preventDefault();
+                    deleteSingleImage(index);
+                };
+
+                wrapper.appendChild(img);
+                wrapper.appendChild(label);
+                wrapper.appendChild(deleteBtn);
+                
+                // إضافة الصورة إلى المعرض
+                gallery.appendChild(wrapper);
+
+                // تأخير 1 ملي ثانية قبل إضافة الصورة التالية
+                await new Promise(resolve => setTimeout(resolve, 1));
+
+                // إضافة أحداث السحب لكل صورة
+                setupDragEvents(wrapper, index);
+            }
+        }
+
+        // إعداد أحداث السحب للصورة
+        function setupDragEvents(wrapper, index) {
+            // Drag بالماوس
+            wrapper.addEventListener('dragstart', (e) => {
+                const deleteBtn = wrapper.querySelector('.delete-btn');
+                if (e.target === deleteBtn) {
+                    e.preventDefault();
+                    return;
+                }
+                dragIndex = index;
+                wrapper.classList.add('dragging');
+            });
+
+            wrapper.addEventListener('dragend', () => {
+                wrapper.classList.remove('dragging');
+                removeAllDragOver();
+            });
+
+            wrapper.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                if (dragIndex === index) return;
+                removeAllDragOver();
+                wrapper.classList.add('drag-over');
+            });
+
+            wrapper.addEventListener('dragleave', () => wrapper.classList.remove('drag-over'));
+
+            wrapper.addEventListener('drop', async (e) => {
+                e.preventDefault();
+                const dropIndex = index;
+                if (dragIndex === null || dragIndex === dropIndex) return;
+
+                const movedItem = images.splice(dragIndex, 1)[0];
+                images.splice(dropIndex, 0, movedItem);
+
+                dragIndex = null;
+                
+                // حفظ الترتيب الجديد في IndexedDB
+                await saveImagesToDB(images);
+                displayGallery();
+            });
+
+            // Drag باللمس + Auto Scroll
+            wrapper.addEventListener('touchstart', (e) => {
+                const deleteBtn = wrapper.querySelector('.delete-btn');
+                if (e.target === deleteBtn) {
+                    e.preventDefault();
+                    return;
+                }
+                dragIndex = index;
+                wrapper.classList.add('dragging');
+            }, { passive: true });
+
+            wrapper.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+
+                const touch = e.touches[0];
+                handleAutoScroll(touch.clientY);
+
+                const element = document.elementFromPoint(touch.clientX, touch.clientY);
+                if (!element) return;
+
+                const target = element.closest('.thumb');
+                if (!target) return;
+
+                const overIndex = Number(target.dataset.index);
+                if (overIndex === dragIndex) return;
+
+                removeAllDragOver();
+                target.classList.add('drag-over');
+
+            }, { passive: false });
+
+            wrapper.addEventListener('touchend', async (e) => {
+                stopAutoScroll();
+
+                const touch = e.changedTouches[0];
+                const element = document.elementFromPoint(touch.clientX, touch.clientY);
+
+                wrapper.classList.remove('dragging');
+                removeAllDragOver();
+
+                if (!element) {
+                    dragIndex = null;
+                    return;
+                }
+
+                const target = element.closest('.thumb');
+                if (!target) {
+                    dragIndex = null;
+                    return;
+                }
+
+                const dropIndex = Number(target.dataset.index);
+
+                if (dragIndex !== null && dragIndex !== dropIndex) {
+                    const movedItem = images.splice(dragIndex, 1)[0];
+                    images.splice(dropIndex, 0, movedItem);
+                    
+                    // حفظ الترتيب الجديد في IndexedDB
+                    await saveImagesToDB(images);
+                    displayGallery();
+                }
+
+                dragIndex = null;
+            });
+        }
+
+        // إرسال الصور للصفحة الأخرى
+        document.getElementById('viewBtn').addEventListener('click', async () => {
+            if (images.length === 0) {
+                alert('الرجاء رفع الصور أولاً');
+                return;
+            }
+
+            try {
+                // حفظ الصور في IndexedDB قبل الانتقال
+                await saveImagesToDB(images);
+                
+                // استخدام sessionStorage للإشارة فقط (وليس تخزين الصور)
+                sessionStorage.setItem('imagesReady', 'true');
+                sessionStorage.setItem('imageCount', images.length);
+                
+                window.location.href = 'viewer.html';
+            } catch (error) {
+                console.error('Error saving before navigation:', error);
+                alert('حدث خطأ في حفظ الصور. الرجاء المحاولة مرة أخرى.');
+            }
+        });
+
+        // إضافة مستمع حدث لزر المسح
+        const clearBtn = document.getElementById('clearBtn');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', clearAllImages);
+        }
+
+        // تهيئة الصفحة - تحميل الصور المحفوظة
+        window.addEventListener('load', async () => {
+            await initDB();
+            await loadImagesFromDB();
+            displayGallery();
+        });
+
+        // التأكد من تحميل جميع الصور بالكامل
+        window.addEventListener('load', () => {
+            // التحقق من تحميل جميع الصور في المعرض
+            const images = document.querySelectorAll('#gallery img');
+            images.forEach(img => {
+                if (!img.complete) {
+                    img.addEventListener('load', () => {
+                        console.log('صورة تم تحميلها بالكامل');
+                    });
+                    img.addEventListener('error', () => {
+                        console.error('خطأ في تحميل الصورة');
+                    });
+                }
+            });
+        });
 </script>
 
 
