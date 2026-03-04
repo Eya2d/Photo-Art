@@ -563,29 +563,40 @@ function scrollToPage(index) {
     const container = pageContainers[index];
     if (!container) return;
 
-    // إلغاء أي مؤقتات تمرير
     clearTimeout(scrollTimeout);
     clearTimeout(touchEndTimeout);
 
-    // منع نظام التمرير من العمل أثناء الانتقال
     isScrolling = true;
     isTouching = false;
 
-    // ❌ لا نقوم بتحميل الصورة هنا إطلاقاً
-    // سيتم تحميلها تلقائياً عند توقف التمرير
+    updateSidebarActive(index);
+
+    // نحفظ موقع التمرير المستهدف
+    const targetOffset = container.offsetTop;
 
     container.scrollIntoView({
         behavior: 'smooth',
         block: 'start'
     });
 
-    updateSidebarActive(index);
+    // مراقبة انتهاء التمرير فعلياً
+    const checkIfScrollFinished = () => {
+        const currentScroll = pageView.scrollTop;
 
-    // بعد انتهاء التمرير نسمح للنظام بتحميل الصفحة
-    setTimeout(() => {
-        isScrolling = false;
-        handleScrollEnd(); // هذا سيحمّل الصفحة المركزية فقط
-    }, 400);
+        // إذا وصلنا تقريباً لنفس المكان (فرق أقل من 2px)
+        if (Math.abs(currentScroll - targetOffset) < 2) {
+
+            pageView.removeEventListener('scroll', checkIfScrollFinished);
+
+            isScrolling = false;
+
+            // تحميل الصفحة المركزية فوراً
+            loadCurrentPage();
+
+        }
+    };
+
+    pageView.addEventListener('scroll', checkIfScrollFinished);
 }
 
 // =======================================
