@@ -40,3 +40,49 @@
 
 })();
 
+
+
+
+
+window.onload = function() {
+    // قائمة العناصر المستهدفة
+    const targetElements = 'div, a, button, input, select';
+
+    // تخزين الـ cursor الأصلي لكل عنصر
+    const originalCursors = new WeakMap();
+
+    // دالة لإضافة cursor بالقوة (!important)
+    function setCursorImportant(el, value) {
+        el.style.setProperty('cursor', value, 'important');
+    }
+
+    // عند لمس الشاشة
+    function handleTouchStart(e) {
+        const el = e.target.closest(targetElements);
+        if (!el) return;
+
+        // حفظ cursor الأصلي إذا لم يُحفظ مسبقاً
+        if (!originalCursors.has(el)) {
+            originalCursors.set(el, el.style.cursor || '');
+        }
+
+        // تعيين cursor بالقوة
+        setCursorImportant(el, 'context-menu');
+    }
+
+    // عند تحريك الماوس/المؤشر
+    function handleMouseMove(e) {
+        const el = e.target.closest(targetElements);
+        if (!el) return;
+
+        // إعادة الـ cursor الأصلي بالقوة
+        if (originalCursors.has(el)) {
+            setCursorImportant(el, originalCursors.get(el));
+            originalCursors.delete(el);
+        }
+    }
+
+    // إضافة المستمعين للأحداث
+    document.addEventListener('touchstart', handleTouchStart, { passive: true });
+    document.addEventListener('mousemove', handleMouseMove);
+};
