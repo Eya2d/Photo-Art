@@ -168,6 +168,9 @@ button {
 .thumb {
     touch-action: none;
 }
+#clearBtn {
+    display: none;
+}
 
 
 @media (max-width: 500px) {
@@ -327,50 +330,50 @@ button {
                 alert('لا توجد صور لحذفها');
                 return;
             }
-            
+
             // طلب تأكيد من المستخدم
             const confirmDelete = confirm('هل أنت متأكد من حذف جميع الصور؟');
             if (!confirmDelete) return;
-            
+
             try {
                 // إظهار مؤشر التحميل
                 progressContainer.style.display = 'block';
                 progressBar.style.width = '50%';
-                
+
                 // مسح المصفوفة
                 images = [];
-                
+
                 // مسح قاعدة البيانات
                 if (db) {
                     const transaction = db.transaction([STORE_NAME], 'readwrite');
                     const store = transaction.objectStore(STORE_NAME);
                     store.clear();
-                    
+
                     await new Promise((resolve, reject) => {
                         transaction.oncomplete = () => {
                             console.log('All images cleared from DB');
                             resolve();
                         };
-                        
+
                         transaction.onerror = () => {
                             console.error('Error clearing DB');
                             reject('Error clearing database');
                         };
                     });
                 }
-                
+
                 // تحديث شريط التحميل
                 progressBar.style.width = '100%';
-                
+
                 // تحديث المعرض
                 displayGallery();
-                
+
                 // إخفاء شريط التحميل بعد قليل
                 setTimeout(() => {
                     progressContainer.style.display = 'none';
                     progressBar.style.width = '0%';
                 }, 500);
-                
+
             } catch (error) {
                 console.error('Error clearing images:', error);
                 alert('حدث خطأ أثناء حذف الصور');
