@@ -408,7 +408,7 @@ function handleScroll() {
         if (!isTouching) {
             handleScrollEnd();
         }
-    }, 100); // تقليل الوقت إلى 100ms للاستجابة الأسرع
+    }, 0); // تقليل الوقت إلى 100ms للاستجابة الأسرع
     
     // تحديث العنصر النشط أثناء التمرير (بدون تحميل)
     updateSidebarActive(getCurrentPageIndex());
@@ -563,66 +563,29 @@ function scrollToPage(index) {
     const container = pageContainers[index];
     if (!container) return;
 
+    // إلغاء أي مؤقتات تمرير
     clearTimeout(scrollTimeout);
     clearTimeout(touchEndTimeout);
 
-    // إيقاف نظام التمرير مؤقتاً
+    // منع نظام التمرير من العمل أثناء الانتقال
     isScrolling = true;
     isTouching = false;
 
-    const canvas = container.querySelector('canvas');
+    // ❌ لا نقوم بتحميل الصورة هنا إطلاقاً
+    // سيتم تحميلها تلقائياً عند توقف التمرير
 
-    // ✅ تحميل فوري فقط إذا لم تكن الصفحة الحالية
-    if (currentVisiblePage !== index) {
-
-        // إزالة الصفحة السابقة مباشرة
-        unloadPreviousPage(index);
-
-        // تحميل الصورة فوراً
-        const ctx = canvas.getContext('2d', { alpha: true });
-        const image = new Image();
-        image.src = images[index];
-
-        image.onload = () => {
-
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            let scale = Math.min(
-                canvas.width / image.width,
-                canvas.height / image.height
-            );
-
-            let w = image.width * scale;
-            let h = image.height * scale;
-
-            ctx.drawImage(
-                image,
-                (canvas.width - w) / 2,
-                (canvas.height - h) / 2,
-                w,
-                h
-            );
-
-            loadedPages.clear();        // ضمان عدم وجود صفحات أخرى محملة
-            loadedPages.add(index);
-            canvasReferences.clear();
-            canvasReferences.set(index, image);
-            currentVisiblePage = index;
-        };
-    }
-
-    // تمرير فوري
     container.scrollIntoView({
-        behavior: 'auto', // ⚡ أسرع من smooth للهاتف
+        behavior: 'smooth',
         block: 'start'
     });
 
     updateSidebarActive(index);
 
-    // إعادة تفعيل النظام بعد جزء من الثانية
+    // بعد انتهاء التمرير نسمح للنظام بتحميل الصفحة
     setTimeout(() => {
         isScrolling = false;
-    }, 100);
+        handleScrollEnd(); // هذا سيحمّل الصفحة المركزية فقط
+    }, 400);
 }
 
 // =======================================
