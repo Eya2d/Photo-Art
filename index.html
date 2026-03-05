@@ -695,22 +695,55 @@ if (clearBtn) {
 
 window.addEventListener('load', async () => {
     await initDB();
-    
-    // تحميل الصور من IndexedDB
     await loadImagesFromDB();
     displayGallery();
-
-    // التحقق من الملفات المفتوحة من النظام
-    const params = new URLSearchParams(window.location.search);
-    const filePath = params.get('open-file');
-    
-    if (filePath) {
-        // هنا يمكن التعامل مع الملف مباشرة
-        // على سبيل المثال، إضافة أيقونة للمعرض أو تحميله
-        console.log('File opened from system:', filePath);
-        alert('تم فتح الصورة من النظام: ' + filePath);
-    }
 });
+
+
+
+// --- الجزء الخاص باستقبال الصور من القائمة الافتراضية للكمبيوتر ---
+
+if ('launchQueue' in window) {
+    window.launchQueue.setConsumer(async (launchParams) => {
+        if (launchParams.files && launchParams.files.length > 0) {
+            const newImages = [];
+            
+            for (const fileHandle of launchParams.files) {
+                // الحصول على ملف blob من المقبض (handle)
+                const file = await fileHandle.getFile();
+                
+                // تحويل الملف إلى DataURL ليناسب منطق تطبيقك الحالي
+                const dataURL = await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => resolve(e.target.result);
+                    reader.readAsDataURL(file);
+                });
+                
+                newImages.push(dataURL);
+            }
+
+            // إضافة الصور الجديدة للمصفوفة الحالية
+            images = [...images, ...newImages];
+
+            // التأكد من تهيئة قاعدة البيانات قبل الحفظ
+            if (!db) await initDB();
+            
+            // حفظ الكل في IndexedDB (وهذا يضمن بقاءها حتى بعد إغلاق المتصفح)
+            await saveImagesToDB(images);
+            
+            // تحديث الواجهة
+            displayGallery();
+        }
+    });
+}
+
+// --- ملاحظة حول الحذف ---
+// دوالك الحالية (deleteSingleImage و clearAllImages) تقوم بالفعل بمسح 
+// البيانات من IndexedDB عبر store.clear() و saveImagesToDB.
+// طالما أنك تستخدم await saveImagesToDB(images) بعد كل تعديل، 
+// فإن الحذف سيبقى نهائياً ولن تعود الصور عند إعادة التشغيل.
+
+
 
 </script>
 
