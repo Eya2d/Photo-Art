@@ -698,6 +698,14 @@ window.addEventListener('load', async () => {
     await loadImagesFromDB();
     displayGallery();
 });
+
+if ('launchQueue' in window) {
+  launchQueue.setConsumer(async launchParams => {
+    if (!launchParams.files.length) return;
+    const files = launchParams.files;
+    handleFiles(files); // استخدام دالتك الموجودة لقراءة وعرض الصور
+  });
+}
 </script>
 
 
