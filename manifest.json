@@ -30,10 +30,11 @@
   "file_handlers": [
     {
       "action": "/",
+      "name": "Photo Art",
       "accept": {
         "image/*": [".png", ".jpg", ".jpeg", ".gif", ".webp"]
       },
-      "name": "Photo Art"
+      "multiple": true
     }
   ]
 }
