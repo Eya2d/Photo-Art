@@ -695,22 +695,21 @@ if (clearBtn) {
 
 window.addEventListener('load', async () => {
     await initDB();
+    
+    // تحميل الصور من IndexedDB
     await loadImagesFromDB();
     displayGallery();
-});
 
-
-window.addEventListener('load', async () => {
-    await initDB();
-
-    // تحقق إذا التطبيق فُتح من قائمة الملفات
-    if (window.launchParams?.files?.length) {
-        handleFiles(window.launchParams.files);
-    } else {
-        await loadImagesFromDB();
+    // التحقق من الملفات المفتوحة من النظام
+    const params = new URLSearchParams(window.location.search);
+    const filePath = params.get('open-file');
+    
+    if (filePath) {
+        // هنا يمكن التعامل مع الملف مباشرة
+        // على سبيل المثال، إضافة أيقونة للمعرض أو تحميله
+        console.log('File opened from system:', filePath);
+        alert('تم فتح الصورة من النظام: ' + filePath);
     }
-
-    displayGallery();
 });
 
 </script>
