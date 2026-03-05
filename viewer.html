@@ -6,6 +6,7 @@
 <link rel="icon" href="Image/logo.png">
 <title>View file - PDF viewer with share & download</title>
 <link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#ffffff">
 <!-- Ionicons -->
 <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
 <!-- Wave & Title effects (保持不变) -->
@@ -703,6 +704,18 @@ document.addEventListener('touchstart', (e) => {
 setTimeout(() => {
     closeSidebar(0);
 }, 100);
+</script>
+
+
+
+<script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then(reg => console.log('SW registered', reg))
+          .catch(err => console.log('SW registration failed', err));
+      });
+    }
 </script>
 
 <script src="viewer.js"></script>
