@@ -29,10 +29,10 @@
   ],
   "file_handlers": [
     {
-      "action": "/",
-      "name": "Photo Art",
+      "action": "/?action=import",
+      "name": "Open with Photo Art",
       "accept": {
-        "image/*": [".png", ".jpg", ".jpeg", ".gif", ".webp"]
+        "image/*": [".png", ".jpg", ".jpeg", ".webp", ".gif"]
       },
       "multiple": true
     }
