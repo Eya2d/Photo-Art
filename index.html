@@ -278,6 +278,11 @@ async function loadImagesFromDB() {
                 const items = request.result;
                 // ترتيب حسب order
                 items.sort((a, b) => a.order - b.order);
+                
+                // ✅ مسح المصفوفة أولاً قبل إضافة الصور
+                images = [];
+                
+                // ثم إضافة الصور من قاعدة البيانات
                 images = items.map(item => item.dataURL);
                 resolve(images);
             };
@@ -351,15 +356,17 @@ async function clearAllImages() {
         if (db) {
             const transaction = db.transaction([STORE_NAME], 'readwrite');
             const store = transaction.objectStore(STORE_NAME);
-            store.clear();
             
+            // ✅ التأكد من اكتمال عملية المسح
             await new Promise((resolve, reject) => {
-                transaction.oncomplete = () => {
+                const clearRequest = store.clear();
+                
+                clearRequest.onsuccess = () => {
                     console.log('All images cleared from DB');
                     resolve();
                 };
                 
-                transaction.onerror = () => {
+                clearRequest.onerror = () => {
                     console.error('Error clearing DB');
                     reject('Error clearing database');
                 };
@@ -377,9 +384,6 @@ async function clearAllImages() {
             progressContainer.style.display = 'none';
             progressBar.style.width = '0%';
         }, 500);
-        
-        // تم التعليق على رسالة النجاح
-        // alert('تم حذف جميع الصور بنجاح');
         
     } catch (error) {
         console.error('Error clearing images:', error);
@@ -694,13 +698,22 @@ if (clearBtn) {
     clearBtn.addEventListener('click', clearAllImages);
 }
 
+// ✅ تعديل بدء التشغيل ليكون أكثر أماناً
 window.addEventListener('load', async () => {
-    await initDB();
-    await loadImagesFromDB();
-    displayGallery();
+    try {
+        await initDB();
+        
+        // ✅ مسح المصفوفة قبل التحميل (كإجراء احترازي إضافي)
+        images = [];
+        
+        await loadImagesFromDB();
+        displayGallery();
+    } catch (error) {
+        console.error('Error during initialization:', error);
+        images = [];
+        displayGallery();
+    }
 });
-
-
 
 // --- الجزء الخاص باستقبال الصور من القائمة الافتراضية للكمبيوتر ---
 
@@ -717,9 +730,6 @@ if ('launchQueue' in window) {
             for (const fileHandle of launchParams.files) {
                 const file = await fileHandle.getFile();
                 
-                // إنشاء معرف فريد للصورة بناءً على الاسم والحجم لضمان عدم التكرار
-                const fileId = `${file.name}-${file.size}-${file.lastModified}`;
-
                 // تحويل الملف إلى DataURL
                 const dataURL = await new Promise((resolve) => {
                     const reader = new FileReader();
@@ -748,13 +758,6 @@ if ('launchQueue' in window) {
         }
     });
 }
-
-// --- ملاحظة حول الحذف ---
-// دوالك الحالية (deleteSingleImage و clearAllImages) تقوم بالفعل بمسح 
-// البيانات من IndexedDB عبر store.clear() و saveImagesToDB.
-// طالما أنك تستخدم await saveImagesToDB(images) بعد كل تعديل، 
-// فإن الحذف سيبقى نهائياً ولن تعود الصور عند إعادة التشغيل.
-
 
 
 </script>
