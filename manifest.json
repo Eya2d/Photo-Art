@@ -5,5 +5,21 @@
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#ffffff",
-  "theme_color": "#ffffff"
+  "theme_color": "#ffffff",
+  "shortcuts": [
+    {
+      "name": "سحب صور جديدة",
+      "short_name": "سحب صور",
+      "description": "فتح المعرض لرفع صور جديدة",
+      "url": "/?action=upload",
+      "icons": [{ "src": "Image/logo.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "عرض الصور",
+      "short_name": "عرض",
+      "description": "الذهاب لصفحة عرض الصور",
+      "url": "/viewer.html",
+      "icons": [{ "src": "Image/logo.png", "sizes": "192x192" }]
+    }
+  ]
 }
