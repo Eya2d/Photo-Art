@@ -86,3 +86,12 @@ window.onload = function() {
     document.addEventListener('touchstart', handleTouchStart, { passive: true });
     document.addEventListener('mousemove', handleMouseMove);
 };
+
+
+
+
+
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js');
+}
