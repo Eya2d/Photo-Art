@@ -134,6 +134,7 @@ button {
 }
 
 .page-container {
+    position: relative;
     width: 794px;   /* عرض A4 بالبيكسل */
     height: 1123px; /* ارتفاع A4 بالبيكسل */
     background: white;
@@ -151,6 +152,15 @@ button {
     max-height: 100%;
     object-fit: contain;
 }
+
+.page-loading {
+    position: absolute;
+    z-index: 3;
+}
+.page-loading img {
+    height: 40px !important;
+}
+
 
 .back {
     position: absolute;
