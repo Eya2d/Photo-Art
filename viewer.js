@@ -243,10 +243,20 @@ async function displaySidebar() {
 }
 
 // =======================================
-// تحميل صورة في Canvas (معدلة لإزالة الصورة السابقة)
+// تحميل صورة في Canvas (معدلة لإضافة وإزالة عنصر التحميل من DOM)
 // =======================================
 function loadImageIntoCanvas(canvas, imageSrc, index) {
     return new Promise((resolve) => {
+        // الحصول على الـ container الخاص بالصفحة
+        const container = pageContainers[index];
+        
+        // إنشاء عنصر التحميل وإضافته للـ DOM فقط عند الحاجة
+        const loadingDiv = document.createElement('div');
+        loadingDiv.className = 'page-loading';
+        loadingDiv.innerHTML = '<img src="Image/loading.gif">';
+        loadingDiv.style.display = 'flex'; // إظهاره فور إضافته
+        container.appendChild(loadingDiv); // إضافته للـ DOM الآن
+        
         const ctx = canvas.getContext('2d', { alpha: true });
         
         const image = new Image();
@@ -275,13 +285,27 @@ function loadImageIntoCanvas(canvas, imageSrc, index) {
             canvasReferences.set(index, image);
             currentVisiblePage = index; // تحديث الصفحة الحالية
             
+            // إزالة عنصر التحميل تماماً من DOM بعد ظهور الصورة
+            if (loadingDiv && loadingDiv.parentNode) {
+                loadingDiv.remove(); // إزالة كاملة من DOM
+            }
+            
             resolve();
+        };
+        
+        // معالجة الخطأ في تحميل الصورة
+        image.onerror = () => {
+            console.error(`فشل تحميل الصورة ${index + 1}`);
+            if (loadingDiv && loadingDiv.parentNode) {
+                loadingDiv.remove(); // إزالة عنصر التحميل في حالة الفشل أيضاً
+            }
+            resolve(); // نكمل على أي حال
         };
     });
 }
 
 // =======================================
-// إزالة الصفحة السابقة (دالة جديدة)
+// إزالة الصفحة السابقة (معدلة لإزالة عناصر التحميل العالقة)
 // =======================================
 function unloadPreviousPage(newPageIndex) {
     if (currentVisiblePage !== -1 && currentVisiblePage !== newPageIndex) {
@@ -289,23 +313,39 @@ function unloadPreviousPage(newPageIndex) {
         if (previousContainer) {
             const previousCanvas = previousContainer.querySelector('canvas');
             unloadImageFromCanvas(previousCanvas, currentVisiblePage);
+            
+            // التأكد من إزالة أي عنصر تحميل عالق في الصفحة السابقة
+            const oldLoadingDiv = previousContainer.querySelector('.page-loading');
+            if (oldLoadingDiv) {
+                oldLoadingDiv.remove();
+            }
+            
             console.log(`تم إزالة الصفحة ${currentVisiblePage + 1} من DOM`);
         }
     }
 }
 
 // =======================================
-// تفريغ صورة من Canvas
+// تفريغ صورة من Canvas (معدلة)
 // =======================================
 function unloadImageFromCanvas(canvas, index) {
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     loadedPages.delete(index);
     canvasReferences.delete(index);
+    
+    // إزالة أي عنصر تحميل متبقي عند تفريغ الكانفاس
+    const container = pageContainers[index];
+    if (container) {
+        const loadingDiv = container.querySelector('.page-loading');
+        if (loadingDiv) {
+            loadingDiv.remove();
+        }
+    }
 }
 
 // =======================================
-// عرض الصفحات
+// عرض الصفحات (معدلة - بدون إضافة عنصر التحميل مسبقاً)
 // =======================================
 async function displayPages() {
     pageView.innerHTML = '';
@@ -329,6 +369,10 @@ async function displayPages() {
         canvas.style.height = '1123px';
 
         container.appendChild(canvas);
+        
+        // ❌ لم نعد نضيف عنصر التحميل هنا
+        // سيتم إضافته فقط عند الحاجة في loadImageIntoCanvas
+        
         pageView.appendChild(container);
         pageContainers.push(container);
     }
@@ -408,14 +452,14 @@ function handleScroll() {
         if (!isTouching) {
             handleScrollEnd();
         }
-    }, 10); // تقليل الوقت إلى 100ms للاستجابة الأسرع
+    }, 10);
     
     // تحديث العنصر النشط أثناء التمرير (بدون تحميل)
     updateSidebarActive(getCurrentPageIndex());
 }
 
 // =======================================
-// تحميل الصفحة الحالية (دالة جديدة)
+// تحميل الصفحة الحالية (معدلة)
 // =======================================
 function loadCurrentPage() {
     const centerIndex = getCenterPageIndex();
@@ -424,6 +468,13 @@ function loadCurrentPage() {
             console.log(`تحميل الصفحة ${centerIndex + 1} فور توقف التمرير`);
             const container = pageContainers[centerIndex];
             const canvas = container.querySelector('canvas');
+            
+            // التأكد من عدم وجود عنصر تحميل قديم قبل البدء
+            const oldLoadingDiv = container.querySelector('.page-loading');
+            if (oldLoadingDiv) {
+                oldLoadingDiv.remove();
+            }
+            
             loadImageIntoCanvas(canvas, images[centerIndex], centerIndex);
         }
     }
@@ -688,7 +739,7 @@ async function generatePDFBlob(progressCallback) {
             }
             
             // تقليل التأخير بشكل كبير
-            await delay(10); // من 50ms إلى 10ms
+            await delay(10);
         }
 
         try {
@@ -898,7 +949,7 @@ async function downloadPDF() {
                 const progress = Math.floor((i / steps) * 100);
                 progressBar.style.width = progress + '%';
                 progressText.textContent = progress + '%';
-                await delay(20); // 20ms فقط لكل خطوة
+                await delay(20);
             }
         } else {
             // إنشاء PDF مع تقدم أسرع
@@ -924,7 +975,7 @@ async function downloadPDF() {
         // قفزة سريعة إلى 100%
         progressBar.style.width = '100%';
         progressText.textContent = '100%';
-        await delay(100); // تأخير بسيط جداً
+        await delay(100);
 
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -935,7 +986,7 @@ async function downloadPDF() {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
 
-        setTimeout(preGeneratePDF, 500); // إنشاء PDF جديد بعد نصف ثانية
+        setTimeout(preGeneratePDF, 500);
 
     } catch (e) {
         if (e.message === 'PDF generation stopped by user') {
@@ -999,12 +1050,12 @@ async function sharePDF() {
             const progress = Math.floor((i / steps) * 100);
             progressBar.style.width = progress + '%';
             progressText.textContent = progress + '%';
-            await delay(15); // 15ms فقط لكل خطوة
+            await delay(15);
         }
 
         progressBar.style.width = '100%';
         progressText.textContent = 'اكتمل الإنشاء';
-        await delay(50); // تأخير بسيط جداً
+        await delay(50);
 
         // إنشاء كائن File
         const file = new File([cachedPDFBlob], "Amazon-KDP-Book.pdf", {
