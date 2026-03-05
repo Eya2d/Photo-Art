@@ -5,33 +5,5 @@
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#ffffff",
-  "theme_color": "#ffffff",
-  "shortcuts": [
-    {
-      "name": "افتح المعرض",
-      "short_name": "المعرض",
-      "description": "افتح المعرض لسحب الصور",
-      "url": "/?action=openGallery",
-      "icons": [
-        {
-          "src": "/Image/logo.png",
-          "sizes": "192x192",
-          "type": "image/png"
-        }
-      ]
-    },
-    {
-      "name": "عرض الصور",
-      "short_name": "عرض",
-      "description": "اذهب إلى صفحة عرض الصور",
-      "url": "/viewer.html",
-      "icons": [
-        {
-          "src": "//Image/logo.png",
-          "sizes": "192x192",
-          "type": "image/png"
-        }
-      ]
-    }
-  ]
+  "theme_color": "#ffffff"
 }
