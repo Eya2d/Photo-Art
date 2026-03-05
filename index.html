@@ -695,28 +695,17 @@ if (clearBtn) {
 
 // تهيئة الصفحة - تحميل الصور المحفوظة
 window.addEventListener('load', async () => {
-    // تحميل الصور وتهيئة المعرض
     await initDB();
     await loadImagesFromDB();
     displayGallery();
 
-    // التحقق من الاختصار المستخدم
-    const params = new URLSearchParams(window.location.search);
-    const shortcut = params.get('shortcut');
-
-    if (shortcut === 'drop-area') {
-        // التركيز على drop-area
-        const drop = document.getElementById('drop-area');
-        if (drop) {
-            drop.scrollIntoView({ behavior: 'smooth' });
-            drop.classList.add('highlight'); // يمكنك إضافة تأثير CSS مؤقت
-            setTimeout(() => drop.classList.remove('highlight'), 1500);
-        }
-    } else if (shortcut === 'viewBtn') {
-        // فتح صفحة العرض مباشرة
-        if (window.location.pathname !== '/viewer.html') {
-            window.location.href = 'viewer.html';
-        }
+    // الكود الجديد لمعالجة الاختصار
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('action') === 'upload') {
+        // تأخير بسيط للتأكد من أن المتصفح جاهز للتفاعل
+        setTimeout(() => {
+            fileElem.click();
+        }, 500);
     }
 });
 </script>
