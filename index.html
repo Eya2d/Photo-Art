@@ -693,29 +693,32 @@ if (clearBtn) {
     clearBtn.addEventListener('click', clearAllImages);
 }
 
+// كود استقبال الملفات من النظام (File Handling API)
+if ('launchQueue' in window) {
+    window.launchQueue.setConsumer(async (launchParams) => {
+        if (launchParams.files && launchParams.files.length > 0) {
+            const files = [];
+            for (const fileHandle of launchParams.files) {
+                const file = await fileHandle.getFile();
+                files.push(file);
+            }
+            handleFiles(files); // استدعاء الدالة الموجودة في الكود
+        }
+    });
+}
+
 window.addEventListener('load', async () => {
     await initDB();
     await loadImagesFromDB();
     displayGallery();
+    
+    // التحقق إذا تم فتح التطبيق عبر مشاركة ملفات
+    if (window.launchQueue) {
+        console.log('File Handling API is supported and ready');
+    }
 });
 
 
-
-
-if ('launchQueue' in window) {
-  launchQueue.setConsumer(async launchParams => {
-    if (!launchParams.files.length) return;
-
-    const files = [];
-    for (const handle of launchParams.files) {
-      // handle هو FileSystemFileHandle
-      const file = await handle.getFile(); 
-      files.push(file);
-    }
-
-    handleFiles(files); // الآن تمرر ملفات صحيحة
-  });
-}
 </script>
 
 
