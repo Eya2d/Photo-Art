@@ -707,33 +707,44 @@ window.addEventListener('load', async () => {
 if ('launchQueue' in window) {
     window.launchQueue.setConsumer(async (launchParams) => {
         if (launchParams.files && launchParams.files.length > 0) {
-            const newImages = [];
+            
+            // 1. تأكد من تحميل الصور الحالية من قاعدة البيانات أولاً
+            if (!db) await initDB();
+            await loadImagesFromDB(); 
+
+            const newImagesData = [];
             
             for (const fileHandle of launchParams.files) {
-                // الحصول على ملف blob من المقبض (handle)
                 const file = await fileHandle.getFile();
                 
-                // تحويل الملف إلى DataURL ليناسب منطق تطبيقك الحالي
+                // إنشاء معرف فريد للصورة بناءً على الاسم والحجم لضمان عدم التكرار
+                const fileId = `${file.name}-${file.size}-${file.lastModified}`;
+
+                // تحويل الملف إلى DataURL
                 const dataURL = await new Promise((resolve) => {
                     const reader = new FileReader();
                     reader.onload = (e) => resolve(e.target.result);
                     reader.readAsDataURL(file);
                 });
-                
-                newImages.push(dataURL);
+
+                // التحقق: هل هذه الصورة موجودة بالفعل في المعرض؟ 
+                // إذا لم تكن موجودة، أضفها.
+                const exists = images.some(img => img === dataURL);
+                if (!exists) {
+                    newImagesData.push(dataURL);
+                }
             }
 
-            // إضافة الصور الجديدة للمصفوفة الحالية
-            images = [...images, ...newImages];
-
-            // التأكد من تهيئة قاعدة البيانات قبل الحفظ
-            if (!db) await initDB();
-            
-            // حفظ الكل في IndexedDB (وهذا يضمن بقاءها حتى بعد إغلاق المتصفح)
-            await saveImagesToDB(images);
-            
-            // تحديث الواجهة
-            displayGallery();
+            if (newImagesData.length > 0) {
+                // إضافة الصور الجديدة فقط
+                images = [...images, ...newImagesData];
+                
+                // حفظ التغييرات النهائية
+                await saveImagesToDB(images);
+                
+                // تحديث الواجهة
+                displayGallery();
+            }
         }
     });
 }
