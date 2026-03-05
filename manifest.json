@@ -23,14 +23,14 @@
   ],
   "screenshots": [
     {
-      "src": "Image/screenshot-mobile.png",
+      "src": "Image/logo.png",
       "sizes": "750x1334",
       "type": "image/png",
       "form_factor": "narrow",
       "label": "واجهة الجوال"
     },
     {
-      "src": "Image/screenshot-desktop.png",
+      "src": "Image/logo.png",
       "sizes": "1920x1080",
       "type": "image/png",
       "form_factor": "wide",
