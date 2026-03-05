@@ -17,5 +17,21 @@
       "sizes": "512x512",
       "type": "image/png"
     }
+  ],
+  "shortcuts": [
+    {
+      "name": "افتح المعرض",
+      "short_name": "المعرض",
+      "description": "اذهب مباشرة إلى منطقة رفع الصور",
+      "url": "/?shortcut=drop-area",
+      "icons": [{ "src": "Image/logo.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "اذهب لصفحة العرض",
+      "short_name": "صفحة العرض",
+      "description": "افتح صفحة العرض مباشرة",
+      "url": "/viewer.html?shortcut=viewBtn",
+      "icons": [{ "src": "Image/logo.png", "sizes": "192x192" }]
+    }
   ]
 }
