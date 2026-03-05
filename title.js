@@ -49,6 +49,9 @@
         let currentElement = null;
         let touchTimer = null;
 
+        // متغير لتتبع حالة الـ Media Query
+        let isSmallScreen = window.matchMedia('(max-width: 500px)').matches;
+
         // ===========================
         // ترجمة النص
         // ===========================
@@ -168,6 +171,11 @@
         function showTooltip(e) {
             const el = e.currentTarget;
 
+            // [التعديل] إذا كانت الشاشة صغيرة والعنصر لديه كلاس titleoff، لا تظهر الـ Tooltip
+            if (isSmallScreen && el.classList.contains('titleoff')) {
+                return;
+            }
+
             let text = el.dataset.title || el.getAttribute('title');
             if (!text) return;
 
@@ -201,6 +209,10 @@
         // دعم اللمس
         // ===========================
         function handleTouch(e) {
+            // [التعديل] نفس الشرط لمنع الظهور على الشاشات الصغيرة
+            if (isSmallScreen && e.currentTarget.classList.contains('titleoff')) {
+                return;
+            }
             showTooltip(e);
 
             if (touchTimer) clearTimeout(touchTimer);
@@ -208,6 +220,24 @@
             touchTimer = setTimeout(() => {
                 hideTooltip();
             }, 1700);
+        }
+
+        // ===========================
+        // [وظيفة جديدة] تحديث حالة الـ Tooltip بناءً على حجم الشاشة
+        // ===========================
+        function updateTooltipState() {
+            const wasSmallScreen = isSmallScreen;
+            isSmallScreen = window.matchMedia('(max-width: 500px)').matches;
+
+            // إذا تغيرت الحالة من كبير إلى صغير أو العكس
+            if (wasSmallScreen !== isSmallScreen) {
+                if (isSmallScreen) {
+                    // تم الدخول إلى الوضع الصغير: أخفي الـ Tooltip إذا كان ظاهراً
+                    hideTooltip();
+                }
+                // ملاحظة: لا حاجة لاستعادة شيء عند العودة للوضع الكبير،
+                // لأن الأحداث (mouseenter...) ستعمل تلقائياً عند المرور على العناصر.
+            }
         }
 
         // ===========================
@@ -224,8 +254,10 @@
             el.__tooltip_initialized = true;
         }
 
+        // تفعيل العناصر الموجودة حالياً
         document.querySelectorAll('[title], [data-title]').forEach(enableTooltipLazy);
 
+        // مراقبة العناصر الجديدة
         const observer = new MutationObserver(mutations => {
             mutations.forEach(mutation => {
                 mutation.addedNodes.forEach(node => {
@@ -245,6 +277,13 @@
             childList: true,
             subtree: true
         });
+
+        // ===========================
+        // [مستمع جديد] مراقبة تغيير حجم الشاشة
+        // ===========================
+        window.addEventListener('resize', updateTooltipState);
+        // استدعاء أولي للتأكد من الحالة الصحيحة عند التحميل
+        updateTooltipState();
     }
 
     // تشغيل بعد تحميل الصفحة
