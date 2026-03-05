@@ -14,6 +14,14 @@
       "type": "image/png"
     }
   ],
+  "file_handlers": [
+    {
+      "action": "/",
+      "accept": {
+        "image/*": [".jpg", ".jpeg", ".png", ".webp", ".gif"]
+      }
+    }
+  ],
   "screenshots": [
     {
       "src": "Image/logo.png",
@@ -25,15 +33,6 @@
       "sizes": "512x512",
       "type": "image/png",
       "form_factor": "wide"
-    }
-  ],
-  "file_handlers": [
-    {
-      "action": "/?open-file=%s",
-      "accept": {
-        "image/*": [".png", ".jpg", ".jpeg", ".gif", ".webp"]
-      },
-      "name": "Open with Photo Art"
     }
   ]
 }
