@@ -700,23 +700,18 @@ window.addEventListener('load', async () => {
 });
 
 
-if ('launchQueue' in window) {
-    launchQueue.setConsumer(async (launchParams) => {
-        if (!launchParams.files) return;
+window.addEventListener('load', async () => {
+    await initDB();
 
-        const fileHandles = launchParams.files; // مصفوفة من FileSystemFileHandle
-        for (const handle of fileHandles) {
-            const file = await handle.getFile();
-            if (file.type.startsWith('image/')) {
-                const dataURL = await readFileAsDataURL(file, () => {});
-                images.push(dataURL);
-            }
-        }
+    // تحقق إذا التطبيق فُتح من قائمة الملفات
+    if (window.launchParams?.files?.length) {
+        handleFiles(window.launchParams.files);
+    } else {
+        await loadImagesFromDB();
+    }
 
-        await saveImagesToDB(images);
-        displayGallery();
-    });
-}
+    displayGallery();
+});
 
 </script>
 
