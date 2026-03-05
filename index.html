@@ -693,20 +693,10 @@ if (clearBtn) {
     clearBtn.addEventListener('click', clearAllImages);
 }
 
-// تهيئة الصفحة - تحميل الصور المحفوظة
 window.addEventListener('load', async () => {
     await initDB();
     await loadImagesFromDB();
     displayGallery();
-
-    // الكود الجديد لمعالجة الاختصار
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('action') === 'upload') {
-        // تأخير بسيط للتأكد من أن المتصفح جاهز للتفاعل
-        setTimeout(() => {
-            fileElem.click();
-        }, 500);
-    }
 });
 </script>
 
