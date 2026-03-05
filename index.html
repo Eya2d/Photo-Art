@@ -700,33 +700,21 @@ window.addEventListener('load', async () => {
 });
 
 
-// التحقق مما إذا كان النظام يدعم معالجة الملفات
 if ('launchQueue' in window) {
     launchQueue.setConsumer(async (launchParams) => {
-        // التحقق من وجود ملفات مرسلة
-        if (!launchParams.files.length) return;
+        if (!launchParams.files) return;
 
-        const incomingImages = [];
-
-        for (const fileHandle of launchParams.files) {
-            // الحصول على ملف الـ Blob من المقبض (FileHandle)
-            const file = await fileHandle.getFile();
-            
-            // التأكد من أنه صورة
+        const fileHandles = launchParams.files; // مصفوفة من FileSystemFileHandle
+        for (const handle of fileHandles) {
+            const file = await handle.getFile();
             if (file.type.startsWith('image/')) {
                 const dataURL = await readFileAsDataURL(file, () => {});
-                incomingImages.push(dataURL);
+                images.push(dataURL);
             }
         }
 
-        if (incomingImages.length > 0) {
-            // إضافة الصور الجديدة للمصفوفة الحالية
-            images = [...images, ...incomingImages];
-            
-            // حفظ وتحديث المعرض
-            await saveImagesToDB(images);
-            displayGallery();
-        }
+        await saveImagesToDB(images);
+        displayGallery();
     });
 }
 
