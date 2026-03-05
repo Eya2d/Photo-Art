@@ -1,5 +1,4 @@
 {
-  "id": "/",
   "name": "Photo Art",
   "short_name": "Photo Art",
   "start_url": "/",
@@ -7,41 +6,32 @@
   "orientation": "portrait",
   "background_color": "#ffffff",
   "theme_color": "#ffffff",
-  "icons": [
-    {
-      "src": "Image/logo.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    }
-  ],
-  "screenshots": [
-    {
-      "src": "Image/logo.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "label": "Photo Art Mobile View"
-    },
-    {
-      "src": "Image/logo.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "form_factor": "wide",
-      "label": "Photo Art Desktop View"
-    }
-  ],
   "shortcuts": [
     {
-      "name": "سحب صور جديدة",
-      "short_name": "سحب صور",
-      "url": "/?action=upload",
-      "icons": [{ "src": "Image/logo.png", "sizes": "512x512" }]
+      "name": "افتح المعرض",
+      "short_name": "المعرض",
+      "description": "افتح المعرض لسحب الصور",
+      "url": "/?action=openGallery",
+      "icons": [
+        {
+          "src": "/Image/logo.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     },
     {
       "name": "عرض الصور",
       "short_name": "عرض",
+      "description": "اذهب إلى صفحة عرض الصور",
       "url": "/viewer.html",
-      "icons": [{ "src": "Image/logo.png", "sizes": "512x512" }]
+      "icons": [
+        {
+          "src": "//Image/logo.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     }
   ]
 }
