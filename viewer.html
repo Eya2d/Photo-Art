@@ -243,10 +243,11 @@ button {
 .progress-container {
     display: none;
     position: fixed;
-    bottom: 30px;
+    top: 30px;
     left: 50%;
     transform: translateX(-50%);
     width: 300px;
+    font-family: sans-serif;
     background: #f6f8fa;
     padding: 15px;
     border-radius: 8px;
@@ -269,9 +270,12 @@ button {
 .dod button:hover {
     opacity: 1 !important;
 }
+.dod button ion-icon {
+    font-size: 20px;
+}
 
 .progress-title {
-    margin-bottom: 5px;
+    margin-bottom: 10px;
     text-align: center;
     font-weight: bold;
 }
@@ -279,13 +283,13 @@ button {
 .progress-bar-container {
     width: 100%;
     background: #f0f0f0;
-    border-radius: 4px;
+    border-radius: 25px;
     overflow: hidden;
 }
 
 .progress-bar {
     width: 0%;
-    height: 20px;
+    height: 16px; /* 20px */
     background: #2370ff;
     transition: width 0.3s;
 }
