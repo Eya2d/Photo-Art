@@ -13,12 +13,21 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "Image/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "label": "Photo Art Mobile View"
     },
     {
       "src": "Image/logo.png",
-      "sizes": "192x192",
+      "sizes": "512x512",
       "type": "image/png",
-      "purpose": "maskable"
+      "form_factor": "wide",
+      "label": "Photo Art Desktop View"
     }
   ],
   "shortcuts": [
