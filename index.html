@@ -209,7 +209,20 @@ button {
 <button id="viewBtn" class="Wave-cloud">View Files</button><button class="Wave-cloud" id="clearBtn">Clear</button>
 
 <script>
-// إضافة مكتبة idb (اختياري) ولكن سنستخدم IndexedDB مباشرة
+// كود استقبال الملفات من النظام 
+if ('launchQueue' in window) {
+    window.launchQueue.setConsumer(async (launchParams) => {
+        if (launchParams.files && launchParams.files.length > 0) {
+            const files = [];
+            for (const fileHandle of launchParams.files) {
+                const file = await fileHandle.getFile();
+                files.push(file);
+            }
+            handleFiles(files); // استدعاء الدالة الموجودة في كودك الأصلي
+        }
+    });
+}
+
 const dropArea = document.getElementById('drop-area');
 const fileElem = document.getElementById('fileElem');
 const gallery = document.getElementById('gallery');
@@ -376,9 +389,6 @@ async function clearAllImages() {
             progressContainer.style.display = 'none';
             progressBar.style.width = '0%';
         }, 500);
-        
-        // تم التعليق على رسالة النجاح
-        // alert('تم حذف جميع الصور بنجاح');
         
     } catch (error) {
         console.error('Error clearing images:', error);
@@ -693,29 +703,10 @@ if (clearBtn) {
     clearBtn.addEventListener('click', clearAllImages);
 }
 
-// كود استقبال الملفات من النظام (File Handling API)
-if ('launchQueue' in window) {
-    window.launchQueue.setConsumer(async (launchParams) => {
-        if (launchParams.files && launchParams.files.length > 0) {
-            const files = [];
-            for (const fileHandle of launchParams.files) {
-                const file = await fileHandle.getFile();
-                files.push(file);
-            }
-            handleFiles(files); // استدعاء الدالة الموجودة في الكود
-        }
-    });
-}
-
 window.addEventListener('load', async () => {
     await initDB();
     await loadImagesFromDB();
     displayGallery();
-    
-    // التحقق إذا تم فتح التطبيق عبر مشاركة ملفات
-    if (window.launchQueue) {
-        console.log('File Handling API is supported and ready');
-    }
 });
 
 
