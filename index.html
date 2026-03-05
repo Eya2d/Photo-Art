@@ -699,11 +699,21 @@ window.addEventListener('load', async () => {
     displayGallery();
 });
 
+
+
+
 if ('launchQueue' in window) {
   launchQueue.setConsumer(async launchParams => {
     if (!launchParams.files.length) return;
-    const files = launchParams.files;
-    handleFiles(files); // استخدام دالتك الموجودة لقراءة وعرض الصور
+
+    const files = [];
+    for (const handle of launchParams.files) {
+      // handle هو FileSystemFileHandle
+      const file = await handle.getFile(); 
+      files.push(file);
+    }
+
+    handleFiles(files); // الآن تمرر ملفات صحيحة
   });
 }
 </script>
