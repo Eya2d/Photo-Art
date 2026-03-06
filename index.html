@@ -179,9 +179,9 @@ button {
     position: sticky;
     z-index: 10;
     bottom: 0;
-    background: #ffffffd9;
+    background: #f9f9f9;
     backdrop-filter: blur(30px);
-    box-shadow: 0px -6px 16px #fff;
+    box-shadow: 0px -6px 16px #f9f9f9;
 }
 
 
@@ -607,70 +607,145 @@ function displayGallery() {
             displayGallery();
         });
 
-        // Drag باللمس + Auto Scroll
+        // ========== قسم اللمس (Touch Events) المُحسّن ==========
         wrapper.addEventListener('touchstart', (e) => {
             // منع السحب إذا كان الضغط على زر الحذف
-            if (e.target === deleteBtn) {
+            if (e.target === deleteBtn || deleteBtn.contains(e.target)) {
                 e.preventDefault();
                 return;
             }
+            
+            // منع السلوك الافتراضي لمنع تمرير الصفحة أثناء السحب
+            e.preventDefault();
+            
             dragIndex = index;
             wrapper.classList.add('dragging');
-        }, { passive: true });
+            
+            // تخزين الإحداثيات الأولية (اختياري للتحسينات المستقبلية)
+            const touch = e.touches[0];
+            wrapper.dataset.startX = touch.clientX;
+            wrapper.dataset.startY = touch.clientY;
+            
+        }, { passive: false });
 
         wrapper.addEventListener('touchmove', (e) => {
-            e.preventDefault();
+            e.preventDefault(); // منع تمرير الصفحة أثناء السحب
+            
+            if (dragIndex === null) return;
 
             const touch = e.touches[0];
+            
+            // التمرير التلقائي عند الاقتراب من حافة الشاشة
             handleAutoScroll(touch.clientY);
 
-            const element = document.elementFromPoint(touch.clientX, touch.clientY);
-            if (!element) return;
+            // الطريقة المحسنة للعثور على العنصر الموجود أسفل الإصبع
+            // نستخدم elementsFromPoint للحصول على جميع العناصر في تلك النقطة
+            const elementsAtTouch = document.elementsFromPoint(touch.clientX, touch.clientY);
+            
+            // نبحث عن أول عنصر من نوع thumb (الصورة) في القائمة
+            let targetElement = null;
+            for (const el of elementsAtTouch) {
+                if (el.classList && el.classList.contains('thumb')) {
+                    targetElement = el;
+                    break;
+                }
+            }
 
-            const target = element.closest('.thumb');
-            if (!target) return;
+            // إذا لم نجد عنصر thumb، نبحث عن أي عنصر داخل thumb
+            if (!targetElement) {
+                for (const el of elementsAtTouch) {
+                    const closestThumb = el.closest('.thumb');
+                    if (closestThumb) {
+                        targetElement = closestThumb;
+                        break;
+                    }
+                }
+            }
 
-            const overIndex = Number(target.dataset.index);
+            if (!targetElement) return;
+
+            const overIndex = Number(targetElement.dataset.index);
+            
+            // نتأكد أننا لا نسحب فوق نفس العنصر
             if (overIndex === dragIndex) return;
 
+            // إزالة جميع تأثيرات drag-over وإضافة التأثير على العنصر المستهدف
             removeAllDragOver();
-            target.classList.add('drag-over');
+            targetElement.classList.add('drag-over');
 
         }, { passive: false });
 
         wrapper.addEventListener('touchend', async (e) => {
+            e.preventDefault();
+            
+            // إيقاف التمرير التلقائي
             stopAutoScroll();
 
-            const touch = e.changedTouches[0];
-            const element = document.elementFromPoint(touch.clientX, touch.clientY);
-
+            // إزالة كلاس dragging من العنصر الحالي
             wrapper.classList.remove('dragging');
+
+            // الحصول على آخر نقطة لمس
+            const touch = e.changedTouches[0];
+            
+            // البحث عن العنصر الموجود أسفل نقطة اللمس عند رفع الإصبع
+            const elementsAtTouch = document.elementsFromPoint(touch.clientX, touch.clientY);
+            
+            let targetElement = null;
+            
+            // البحث عن عنصر thumb
+            for (const el of elementsAtTouch) {
+                if (el.classList && el.classList.contains('thumb')) {
+                    targetElement = el;
+                    break;
+                }
+            }
+            
+            if (!targetElement) {
+                for (const el of elementsAtTouch) {
+                    const closestThumb = el.closest('.thumb');
+                    if (closestThumb) {
+                        targetElement = closestThumb;
+                        break;
+                    }
+                }
+            }
+
+            // إزالة جميع تأثيرات drag-over
             removeAllDragOver();
 
-            if (!element) {
+            // إذا لم نجد عنصر هدف، ننهي العملية
+            if (!targetElement) {
                 dragIndex = null;
                 return;
             }
 
-            const target = element.closest('.thumb');
-            if (!target) {
-                dragIndex = null;
-                return;
-            }
+            const dropIndex = Number(targetElement.dataset.index);
 
-            const dropIndex = Number(target.dataset.index);
-
-            if (dragIndex !== null && dragIndex !== dropIndex) {
+            // إعادة الترتيب إذا كان هناك فهرس سحب صحيح وفهرس إفلات مختلف
+            if (dragIndex !== null && dragIndex !== dropIndex && dropIndex !== undefined && !isNaN(dropIndex)) {
                 const movedItem = images.splice(dragIndex, 1)[0];
                 images.splice(dropIndex, 0, movedItem);
                 
                 // حفظ الترتيب الجديد في IndexedDB
                 await saveImagesToDB(images);
+                
+                // إعادة عرض المعرض
                 displayGallery();
             }
 
+            // إعادة تعيين متغير السحب
             dragIndex = null;
-        });
+            
+        }, { passive: false });
+
+        // إضافة معالج لـ touchcancel لتنظيف الحالة في حالة إلغاء اللمس (مثلاً بسبب تنبيه)
+        wrapper.addEventListener('touchcancel', (e) => {
+            e.preventDefault();
+            stopAutoScroll();
+            wrapper.classList.remove('dragging');
+            removeAllDragOver();
+            dragIndex = null;
+        }, { passive: false });
     });
 
     // إظهار/إخفاء زر المسح حسب وجود صور
@@ -768,7 +843,6 @@ if ('launchQueue' in window) {
         }
     });
 }
-
 
 </script>
 
