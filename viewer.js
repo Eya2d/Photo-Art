@@ -255,7 +255,7 @@ function loadImageIntoCanvas(canvas, imageSrc, index) {
         if (!loadingDiv) {
             loadingDiv = document.createElement('div');
             loadingDiv.className = 'page-loading';
-            loadingDiv.textContent = 'جار التحميل';
+            loadingDiv.innerHTML = '<img src="Image/loading.gif">';
             container.appendChild(loadingDiv);
         }
         
@@ -355,7 +355,7 @@ async function displayPages() {
         // إضافة عنصر التحميل مخفياً في البداية
         const loadingDiv = document.createElement('div');
         loadingDiv.className = 'page-loading';
-        loadingDiv.textContent = 'جار التحميل';
+        loadingDiv.innerHTML = '<img src="Image/loading.gif">';
         loadingDiv.style.display = 'none'; // مخفي في البداية
         container.appendChild(loadingDiv);
         
