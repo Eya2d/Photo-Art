@@ -175,6 +175,14 @@ button {
 #clearBtn {
     display: none;
 }
+.vvo {
+    position: sticky;
+    z-index: 10;
+    bottom: 0;
+    background: #ffffffd9;
+    backdrop-filter: blur(30px);
+    box-shadow: 0px -6px 16px #fff;
+}
 
 
 @media (max-width: 500px) {
@@ -207,7 +215,9 @@ button {
 
 <div id="gallery"></div>
 
-<button id="viewBtn" class="Wave-cloud">View Files</button><button class="Wave-cloud" id="clearBtn">Clear</button>
+<div class="vvo">
+    <button id="viewBtn" class="Wave-cloud">View Files</button><button class="Wave-cloud" id="clearBtn">Clear</button>
+</div>
 
 <script>
 // إضافة مكتبة idb (اختياري) ولكن سنستخدم IndexedDB مباشرة
