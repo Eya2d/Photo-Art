@@ -531,12 +531,6 @@ function stopAutoScroll() {
     autoScrollInterval = null;
 }
 
-// متغيرات للضغط المطول (لمحاكاة النقر بزر الفأرة الأيمن على الهاتف)
-let longPressTimer = null;
-let touchStartX = 0, touchStartY = 0;
-const LONG_PRESS_DURATION = 500; // 0.5 ثانية
-const MOVE_THRESHOLD = 10; // المسافة المسموح بها قبل بدء السحب
-
 // عرض الصور + إعادة الترتيب بالسحب
 function displayGallery() {
     gallery.innerHTML = '';
@@ -573,7 +567,7 @@ function displayGallery() {
         wrapper.appendChild(deleteBtn);
         gallery.appendChild(wrapper);
 
-        // Drag بالماوس (يبقى كما هو)
+        // Drag بالماوس
         wrapper.addEventListener('dragstart', (e) => {
             // منع السحب إذا كان الضغط على زر الحذف
             if (e.target === deleteBtn) {
@@ -613,50 +607,18 @@ function displayGallery() {
             displayGallery();
         });
 
-        // ---- بداية تعديل اللمس لمحاكاة النقر بزر الفأرة الأيمن ----
-        // متغير لتحديد ما إذا بدأ السحب بالفعل
-        let dragActive = false;
-
+        // Drag باللمس + Auto Scroll
         wrapper.addEventListener('touchstart', (e) => {
             // منع السحب إذا كان الضغط على زر الحذف
             if (e.target === deleteBtn) {
                 e.preventDefault();
                 return;
             }
-
-            // تسجيل نقطة البداية
-            const touch = e.touches[0];
-            touchStartX = touch.clientX;
-            touchStartY = touch.clientY;
-
-            // بدء مؤقت الضغط المطول
-            longPressTimer = setTimeout(() => {
-                // بعد انقضاء المدة، نبدأ وضع السحب
-                dragActive = true;
-                dragIndex = index;
-                wrapper.classList.add('dragging');
-                longPressTimer = null;
-            }, LONG_PRESS_DURATION);
+            dragIndex = index;
+            wrapper.classList.add('dragging');
         }, { passive: true });
 
         wrapper.addEventListener('touchmove', (e) => {
-            if (!dragActive) {
-                // إذا لم يبدأ السحب بعد، نتحقق من حركة الإصبع
-                const touch = e.touches[0];
-                const deltaX = Math.abs(touch.clientX - touchStartX);
-                const deltaY = Math.abs(touch.clientY - touchStartY);
-                
-                // إذا تحرك الإصبع كثيراً قبل اكتمال الضغط المطول، نلغي المؤقت
-                if (deltaX > MOVE_THRESHOLD || deltaY > MOVE_THRESHOLD) {
-                    if (longPressTimer) {
-                        clearTimeout(longPressTimer);
-                        longPressTimer = null;
-                    }
-                }
-                return; // لا نكمل معالجة السحب
-            }
-
-            // إذا كان السحب نشطاً، نمنع التمرير ونتعامل مع الحركة
             e.preventDefault();
 
             const touch = e.touches[0];
@@ -677,15 +639,6 @@ function displayGallery() {
         }, { passive: false });
 
         wrapper.addEventListener('touchend', async (e) => {
-            // إلغاء المؤقت إذا كان لا يزال موجوداً
-            if (longPressTimer) {
-                clearTimeout(longPressTimer);
-                longPressTimer = null;
-                // إذا انتهت اللمسة قبل اكتمال الضغط المطول، لا نبدأ السحب
-                dragActive = false;
-                return;
-            }
-
             stopAutoScroll();
 
             const touch = e.changedTouches[0];
@@ -694,21 +647,14 @@ function displayGallery() {
             wrapper.classList.remove('dragging');
             removeAllDragOver();
 
-            if (!dragActive) {
-                dragIndex = null;
-                return;
-            }
-
             if (!element) {
                 dragIndex = null;
-                dragActive = false;
                 return;
             }
 
             const target = element.closest('.thumb');
             if (!target) {
                 dragIndex = null;
-                dragActive = false;
                 return;
             }
 
@@ -724,20 +670,7 @@ function displayGallery() {
             }
 
             dragIndex = null;
-            dragActive = false;
         });
-
-        wrapper.addEventListener('touchcancel', () => {
-            if (longPressTimer) {
-                clearTimeout(longPressTimer);
-                longPressTimer = null;
-            }
-            dragActive = false;
-            stopAutoScroll();
-            wrapper.classList.remove('dragging');
-            removeAllDragOver();
-        });
-        // ---- نهاية تعديل اللمس ----
     });
 
     // إظهار/إخفاء زر المسح حسب وجود صور
@@ -835,6 +768,7 @@ if ('launchQueue' in window) {
         }
     });
 }
+
 
 </script>
 
