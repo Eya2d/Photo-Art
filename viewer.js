@@ -1,738 +1,1216 @@
-<!DOCTYPE html>
-<html lang="ar">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link rel="icon" href="Image/logo.png">
-<title>View file - PDF viewer with share & download</title>
-<link rel="manifest" href="manifest.json?v=0">
-
-<meta name="theme-color" content="#ffffff">
-<!-- Ionicons -->
-<script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
-<!-- Wave & Title effects (保持不变) -->
-<script src="https://cdn.jsdelivr.net/gh/IconCanyon/Icon-canyon@main/Wave-cloud-3.0.0.js"></script>
-<!-- jsPDF لإنشاء ملف PDF -->
-<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-
-<style>
-body {
-    font-family: Arial, sans-serif;
-    margin: 0;
-    display: flex;
-    height: 100vh;
-    user-select: none;
-}
-
-img {
-    user-select: none !important;
-    -webkit-user-drag: none !important;
-    display: flex !important;
-}
-
-.flexe {
-    display: flex;
-    align-items: center;
-}
-
-.flex {
-    margin-top: 56px;
-    height: -webkit-fill-available;
-    width: 100%;
-    display: flex;
-}
-
-button {
-    cursor: pointer;
-    font-family: Arial;
-    font-size: 14px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background-color: #0000;
-}
-
-/* القائمة الجانبية */
-#sidebar {
-    width: 300px;
-    padding: 24px 0;
-    background: #f6f8fa;
-    overflow-y: auto;
-    border-right: 1px solid #d1d9e0;
-    touch-action: none; /* للسحب على الهواتف */
-    /* حركة السلايدر خارج JS */
-    transition: left 0.6s ease; /* الوقت 0.6 ثانية لتظهر وتختفي ببطء */
-}
-
-.sidebar-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    cursor: pointer;
-    width: max-content;
-    margin: auto;
-}
-.sidebar-item:not(:last-child) {
-    margin-bottom: 10px; 
-}
-
-.sidebar-item-inner {
-    position: relative;
-    overflow: hidden;
-    height: 152px;
-    width: 108px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    /* padding: 4px; */
-    background: #fff;
-}
-.sidebar-item-inner .ripple {
-    background-color: #5197ff48;
-}
-
-.sidebar-item-inner::after {
-    position: absolute;
-    z-index: 5;
-    content: '';
-    width: 100%;
-    height: 100%;
-    left: 0;
-    top: 0;
-    opacity: .5;
-    background-color: white;
-}
-.sidebar-item-inner:hover:after {
-    opacity: .2;
-}
-
-.sidebar-item-inner canvas {
-    max-width: 100px;
-    max-height: 100px;
-    object-fit: cover;
-}
-
-.sidebar-item.active .sidebar-item-inner {
-    box-shadow: 0 0 0 6px rgb(138,180,248);
-}
-.sidebar-item.active ::after {
-    opacity: 0 !important;
-}
-
-.page-number {
-    margin-top: 14px;
-    font-size: 14px;
-}
-
-/* ديف العرض */
-#page-view {
-    flex: 1;
-    padding: 5px 0;
-    overflow-y: auto;
-    background: #f0f0f0;
-    scroll-behavior: smooth;
-}
-
-.page-container {
-    position: relative;
-    width: 794px;   /* عرض A4 بالبيكسل */
-    height: 1123px; /* ارتفاع A4 بالبيكسل */
-    background: white;
-    display: flex;
-    justify-content: center;
-    margin: 0 auto;
-    align-items: center;
-    box-shadow: 0 0 10px rgb(85 93 107 / 30%);
-}
-
-.page-container:not(:last-child) { margin-bottom: 20px !important; }
-
-.page-container canvas {
-    max-width: 100%;
-    max-height: 100%;
-    object-fit: contain;
-}
-
-.page-loading {
-    position: absolute;
-    z-index: 3;
-}
-.page-loading img {
-    height: 40px !important;
-}
-
-
-.back {
-    position: absolute;
-    z-index: 50;
-    bottom: 0;
-    right: 0;
-    padding: 10px 20px;
-    padding-right: 17px;
-    margin: 20px;
-    border: solid 1px #ccc;
-    border-radius: 25px;
-    background: white;
-    box-shadow: 0px 3px 7px #55647a61;
-}
-.back ion-icon { font-size: 20px; margin-left: 8px; }
-.back::after {
-    position: absolute;
-    z-index: 5;
-    content: '';
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-}
-
-.menu {
-    position: fixed;
-    z-index: 5;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 16px;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 56px;
-    background-color: #f6f8fa;
-    box-shadow: 0px 1px 0px #d1d9e0;
-}
-.menu .logo {
-    display: flex;
-    align-items: center;
-    width: max-content;
-    font-size: 18px;
-}
-.menu .logo img {
-    height: 30px;
-    margin-right: 8px;
-}
-.menu .logo span {
-    color: #5197ff;
-    margin: 0 2px;
-}
-.logo button {
-    display: none;
-    margin-right: 8px;
-    margin-left: 0 !important;
-}
-
-.ss {
-    position: relative;
-    cursor: pointer;
-    overflow: hidden;
-    width: 36px;
-    height: 36px;
-    border: none;
-    border-radius: 25px;
-    margin-left: 8px;
-    font-size: 24px;
-    transition: background-color 0.2s;
-}
-.ss:hover {
-    background-color: #e0e4e9;
-}
-.ss:disabled {
-    opacity: 0.5;
-    pointer-events: none;
-}
-.ss::before {
-    position: absolute;
-    z-index: 4;
-    content: '';
-    width: 100%;
-    height: 100%;
-    left: 0;
-    top: 0;
-}
-
-
-
-/* -------------------------------------------- */
-
-.progress-container {
-    display: none;
-    position: fixed;
-    top: 30px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 300px;
-    font-family: sans-serif;
-    background: #f6f8fa;
-    padding: 15px;
-    border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.164);
-    z-index: 1000;
-}
-
-.dod {
-    margin-top: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    direction: rtl;
-}
-.dod button {
-    color: #3c4049;
-    opacity: .7 !important;
-    margin: 0 !important;
-}
-.dod button:hover {
-    opacity: 1 !important;
-}
-.dod button ion-icon {
-    font-size: 20px;
-}
-
-.progress-title {
-    direction: rtl;
-    margin-bottom: 10px;
-    text-align: center;
-    font-weight: bold;
-}
-
-.progress-bar-container {
-    width: 100%;
-    background: #f0f0f0;
-    border-radius: 25px;
-    overflow: hidden;
-}
-
-.progress-bar {
-    width: 0%;
-    height: 16px; /* 20px */
-    background: #2370ff;
-    transition: width 0.3s;
-}
-
-.progress-text {
-    text-align: center;
-    margin-top: 5px;
-    margin-right: 12px;
-}
-
-.no-images {
-    text-align: center;
-    margin: 20px;
-    font-family: sans-serif;
-    direction: rtl;
-}
-.no-images a {
-    color: #2370ff;
-    text-decoration: none;
-    font-weight: 600;
-}
-
-
-
-@media (max-width: 500px) {
-    button,div,a {
-        cursor: context-menu !important;
-    }
-    body #sidebar {
-        position: fixed;
-        z-index: 100;
-        margin-top: 56px;
-        top: 0;
-        opacity: 0;
-        left: -251px;
-        bottom: 0;
-        box-shadow: 2px 0px 30px #b6c3cfb8;
-        width: 250px;
-    }
-    .menu {
-        z-index: 110 !important;
-    }
-    .logo button {
-        display: flex;
-    }
-    body .page-container {
-        width: 100%;
-        height: 100%;
-    }
-    /* عند فتح Sidebar */
-    #sidebar.open {
-        left: 0;
-        opacity: 1;
-    }
-    element.style {
-    transition: none;
-    left: -251px;
-    }
-    .back {
-        position: fixed;
-        padding: 0;
-        width: 50px;
-        height: 50px;
-    }
-    .back z {
-        display: none;
-    }
-    .back ion-icon {
-        font-size: 24px !important;
-        margin: 0 !important;
-    }
-    .page-container:not(:last-child) {
-        margin-bottom: 5px !important;
-    }
-}
-
-
-/* Shimmer (شريط دائري) */
-.global-shimmer {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0);
-    display: none;
-    justify-content: center;
-    align-items: center;
-    z-index: 9999;
-}
-
-.global-shimmer .spinner {
-    width: 50px;
-    height: 50px;
-    border: 5px solid #f3f3f3;
-    border-top: 5px solid #3498db;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin-right: 15px;
-}
-
-.global-shimmer span {
-    color: white;
-    font-size: 18px;
-    font-weight: bold;
-}
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
-/* تأثير shimmer على الأزرار */
-.shimmer-loading {
-    position: relative;
-    overflow: hidden;
-}
-
-.shimmer-loading::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, #f6f8fab7, transparent);
-    animation: shimmer 1.5s infinite;
-}
-
-@keyframes shimmer {
-    0% { transform: translateX(-100%); }
-    100% { transform: translateX(100%); }
-}
-
-/* الأزرار المعطلة */
-#share-button:disabled,
-#download-button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    pointer-events: none;
-}
-
-#sidebar {
-    -webkit-overflow-scrolling: touch;
-}
-
-</style>
-</head>
-<body>
-
-<div class="menu">
-    <div class="logo flexe Wave-all-center">
-        <button class="ss" id="toggleBtn"><ion-icon name="menu-outline"></ion-icon></button>
-        <img src="Image/logo.png" alt=""> Photo Art ( <span class="titleoff" title="نسخة العرض">View</span> )
-    </div>
-
-    <div class="flexe Wave-all-center">
-        <!-- تم إضافة id لتحديد الأزرار -->
-        <button class="ss titleoff" id="share-button" title="مشاركة الكتاب"><ion-icon name="arrow-redo-outline"></ion-icon></button>
-        <button class="ss titleoff" id="download-button" title="تحميل الكتاب"><ion-icon name="arrow-down-circle-outline"></ion-icon></button>
-    </div>
-</div>
-
-<div class="flex">
-    <div id="sidebar"></div>
-    <div id="page-view" class="zoome"></div>
-</div>
-
-<a href="index.html"><button class="back Wave-cloud"><z>Going back</z> <ion-icon name="arrow-forward-outline"></ion-icon></button></a>
-
-
-<!-- مؤشر التحميل -->
-<div id="progress-container" class="progress-container">
-    <div class="progress-title">جاري إنشاء PDF...</div>
-    <div class="progress-bar-container">
-        <div id="progress-bar" class="progress-bar"></div>
-    </div>
-    <div class="dod Wave-all-center">
-        <div id="progress-text" class="progress-text">0%</div>
-        <button class="ss" id="stop-bar" title="Stop"><ion-icon name="stop"></ion-icon></button>
-    </div>
-</div>
-
-
-<script>
+document.addEventListener("DOMContentLoaded", () => {
 const sidebar = document.getElementById('sidebar');
-const toggleBtn = document.getElementById('toggleBtn');
+const pageView = document.getElementById('page-view');
 
-let isOpen = false;
-let startX = 0;
-let startY = 0;
-let currentX = 0;
-let dragging = false;
-let sidebarWidth = 0;
-let dragThreshold = 0;
+// متغيرات IndexedDB
+const DB_NAME = 'ImageGalleryDB';
+const DB_VERSION = 1;
+const STORE_NAME = 'images';
+let db;
+let images = [];
+let pageContainers = [];
 
-let isVerticalDrag = false;
-let isHorizontalDrag = false;
-let startScrollTop = 0;
+// عناصر مؤشر التحميل
+const progressContainer = document.getElementById('progress-container');
+const progressBar = document.getElementById('progress-bar');
+const progressText = document.getElementById('progress-text');
 
-// ==================== تحديث العرض ====================
+// =======================================
+// متغيرات التحكم في إيقاف PDF
+// =======================================
+let stopPDFGeneration = false;
+let isGeneratingPDF = false;
 
-function updateSidebarWidth() {
-    sidebarWidth = sidebar.offsetWidth;
+// متغيرات للتحكم في التحميل الديناميكي
+let loadedPages = new Set();
+let canvasReferences = new Map();
+let currentVisiblePage = -1; // تتبع الصفحة الحالية المرئية
+
+// متغيرات للتحكم في التمرير السريع
+let isScrolling = false;
+let scrollTimeout;
+let touchEndTimeout;
+let isTouching = false;
+let lastScrollTop = 0;
+let scrollDirection = 'down';
+let fastScrollCount = 0;
+let lastScrollPosition = 0;
+let scrollStopDetected = false;
+
+// متغير للتخزين المؤقت للـ PDF
+let cachedPDFBlob = null;
+let isPreGeneratingPDF = false;
+
+// متغيرات للتحكم في حالة الأزرار
+let isShareButtonReady = false;
+let isDownloadButtonReady = false;
+
+// دوال تأخير
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-window.addEventListener('load', updateSidebarWidth);
-window.addEventListener('resize', updateSidebarWidth);
+// =======================================
+// دالة لإظهار تأثير Shimmer على الأزرار فقط
+// =======================================
+function showShimmer(button) {
+    if (button) {
+        button.classList.add('shimmer-loading');
+    }
+}
 
-// ==================== فتح وإغلاق ====================
-
-function openSidebar(duration = 300) {
-    sidebar.style.transition = '';
-    sidebar.style.left = '';
-
-    updateSidebarWidth();
-
-    sidebar.style.left = -sidebarWidth + 'px';
-
-    requestAnimationFrame(() => {
-        sidebar.style.transition = `left ${duration}ms ease`;
-        sidebar.style.left = '0';
-        sidebar.classList.add('open');
-        isOpen = true;
+function hideShimmer() {
+    // إزالة كلاس shimmer من جميع الأزرار
+    document.querySelectorAll('.shimmer-loading').forEach(btn => {
+        btn.classList.remove('shimmer-loading');
     });
 }
 
-function closeSidebar(duration = 300) {
-    sidebar.style.transition = '';
-    sidebar.style.left = '';
+// =======================================
+// دالة لتفعيل/تعطيل الأزرار الرئيسية
+// =======================================
+function setButtonsState(shareState, downloadState) {
+    const shareBtn = document.getElementById('share-button');
+    const downloadBtn = document.getElementById('download-button');
+    
+    if (shareBtn) {
+        shareBtn.disabled = !shareState;
+        shareBtn.style.opacity = shareState ? '1' : '0.5';
+        shareBtn.style.cursor = shareState ? 'pointer' : 'not-allowed';
+    }
+    
+    if (downloadBtn) {
+        downloadBtn.disabled = !downloadState;
+        downloadBtn.style.opacity = downloadState ? '1' : '0.5';
+        downloadBtn.style.cursor = downloadState ? 'pointer' : 'not-allowed';
+    }
+    
+    isShareButtonReady = shareState;
+    isDownloadButtonReady = downloadState;
+}
 
-    updateSidebarWidth();
+// =======================================
+// دالة للتحقق من جاهزية PDF
+// =======================================
+function checkPDFReady() {
+    // زر التنزيل يصبح جاهزاً إذا كان هناك PDF مخزن أو إذا انتهى التحميل المسبق
+    const downloadReady = cachedPDFBlob !== null || !isPreGeneratingPDF;
+    
+    // زر المشاركة يحتاج إلى PDF مخزن فقط (لضمان التفاعل المباشر)
+    const shareReady = cachedPDFBlob !== null;
+    
+    setButtonsState(shareReady, downloadReady);
+    
+    if (shareReady || downloadReady) {
+        hideShimmer();
+    }
+}
 
-    sidebar.style.transition = `left ${duration}ms ease`;
-    sidebar.style.left = -sidebarWidth + 'px';
+// =======================================
+// إيقاف إنشاء PDF
+// =======================================
+function stopPDF() {
+    if (isGeneratingPDF) {
+        stopPDFGeneration = true;
+        const stopBtn = document.getElementById('stop-bar');
+        stopBtn.disabled = true;
+        stopBtn.style.opacity = '0.5';
+        progressText.textContent = 'جاري الإيقاف...';
+    }
+}
 
-    setTimeout(() => {
-        if (!isOpen) {
-            sidebar.classList.remove('open');
-            sidebar.style.transition = '';
-            sidebar.style.left = '';
+// =======================================
+// تهيئة IndexedDB
+// =======================================
+function initDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        
+        request.onerror = (event) => {
+            console.error('Database error:', event.target.error);
+            reject('Error opening database');
+        };
+        
+        request.onsuccess = (event) => {
+            db = event.target.result;
+            console.log('Database opened successfully');
+            resolve(db);
+        };
+        
+        request.onupgradeneeded = (event) => {
+            const db = event.target.result;
+            
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+                const store = db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
+                store.createIndex('order', 'order', { unique: false });
+                console.log('Object store created');
+            }
+        };
+    });
+}
+
+// =======================================
+// تحميل الصور من IndexedDB
+// =======================================
+async function loadImagesFromDB() {
+    try {
+        if (!db) await initDB();
+        
+        const transaction = db.transaction([STORE_NAME], 'readonly');
+        const store = transaction.objectStore(STORE_NAME);
+        const index = store.index('order');
+        const request = index.getAll();
+        
+        return new Promise((resolve, reject) => {
+            request.onsuccess = () => {
+                const items = request.result;
+                items.sort((a, b) => a.order - b.order);
+                images = items.map(item => item.dataURL);
+                resolve(images);
+            };
+            
+            request.onerror = () => {
+                reject('Error loading images');
+            };
+        });
+    } catch (error) {
+        console.error('Error loading from DB:', error);
+        images = [];
+    }
+}
+
+// =======================================
+// عرض القائمة الجانبية
+// =======================================
+async function displaySidebar() {
+    sidebar.innerHTML = '';
+
+    for (let index = 0; index < images.length; index++) {
+        const src = images[index];
+
+        const item = document.createElement('div');
+        item.classList.add('sidebar-item');
+        if (index === 0) item.classList.add('active');
+
+        const inner = document.createElement('div');
+        inner.classList.add('sidebar-item-inner', 'Wave-cloud');
+        
+        // ★★★ ضمان عدم إزالة الصورة من الكانفا ★★★
+        // حفظ الرابط الأصلي في attribute مخصص لاستخدامه لاحقاً إذا لزم الأمر
+        inner.setAttribute('data-original-src', src);
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d', { alpha: true });
+        canvas.width = 300;
+        canvas.height = 300;
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+
+        const image = new Image();
+        image.src = src;
+        image.onload = () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            if (isImageWhite(image)) {
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+                ctx.shadowBlur = 10;
+                ctx.shadowOffsetX = 2;
+                ctx.shadowOffsetY = 2;
+            }
+            
+            let scale = Math.min(canvas.width / image.width, canvas.height / image.height);
+            let w = image.width * scale;
+            let h = image.height * scale;
+            ctx.drawImage(image, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
+            
+            ctx.shadowColor = 'transparent';
+        };
+
+        inner.appendChild(canvas);
+
+        const pageNum = document.createElement('div');
+        pageNum.classList.add('page-number');
+        pageNum.textContent = `${index + 1}`;
+
+        item.appendChild(inner);
+        item.appendChild(pageNum);
+
+        item.addEventListener('click', () => scrollToPage(index));
+
+        sidebar.appendChild(item);
+        await delay(1);
+    }
+}
+
+// =======================================
+// تحميل صورة في Canvas (معدلة لإضافة وإزالة عنصر التحميل من DOM)
+// =======================================
+function loadImageIntoCanvas(canvas, imageSrc, index) {
+    return new Promise((resolve) => {
+        // الحصول على الـ container الخاص بالصفحة
+        const container = pageContainers[index];
+        
+        // إنشاء عنصر التحميل وإضافته للـ DOM فقط عند الحاجة
+        const loadingDiv = document.createElement('div');
+        loadingDiv.className = 'page-loading';
+        loadingDiv.innerHTML = '<img src="Image/loading.gif">';
+        loadingDiv.style.display = 'flex'; // إظهاره فور إضافته
+        container.appendChild(loadingDiv); // إضافته للـ DOM الآن
+        
+        const ctx = canvas.getContext('2d', { alpha: true });
+        
+        const image = new Image();
+        image.src = imageSrc;
+        image.onload = () => {
+            // إزالة الصورة السابقة أولاً
+            unloadPreviousPage(index);
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            if (isImageWhite(image)) {
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.2)';
+                ctx.shadowBlur = 20;
+                ctx.shadowOffsetX = 4;
+                ctx.shadowOffsetY = 4;
+            }
+            
+            let scale = Math.min(canvas.width / image.width, canvas.height / image.height);
+            let w = image.width * scale;
+            let h = image.height * scale;
+            ctx.drawImage(image, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
+            
+            ctx.shadowColor = 'transparent';
+            
+            loadedPages.add(index);
+            canvasReferences.set(index, image);
+            currentVisiblePage = index; // تحديث الصفحة الحالية
+            
+            // إزالة عنصر التحميل تماماً من DOM بعد ظهور الصورة
+            if (loadingDiv && loadingDiv.parentNode) {
+                loadingDiv.remove(); // إزالة كاملة من DOM
+            }
+            
+            resolve();
+        };
+        
+        // معالجة الخطأ في تحميل الصورة
+        image.onerror = () => {
+            console.error(`فشل تحميل الصورة ${index + 1}`);
+            if (loadingDiv && loadingDiv.parentNode) {
+                loadingDiv.remove(); // إزالة عنصر التحميل في حالة الفشل أيضاً
+            }
+            resolve(); // نكمل على أي حال
+        };
+    });
+}
+
+// =======================================
+// إزالة الصفحة السابقة (معدلة لإزالة عناصر التحميل العالقة)
+// =======================================
+function unloadPreviousPage(newPageIndex) {
+    if (currentVisiblePage !== -1 && currentVisiblePage !== newPageIndex) {
+        const previousContainer = pageContainers[currentVisiblePage];
+        if (previousContainer) {
+            const previousCanvas = previousContainer.querySelector('canvas');
+            unloadImageFromCanvas(previousCanvas, currentVisiblePage);
+            
+            // التأكد من إزالة أي عنصر تحميل عالق في الصفحة السابقة
+            const oldLoadingDiv = previousContainer.querySelector('.page-loading');
+            if (oldLoadingDiv) {
+                oldLoadingDiv.remove();
+            }
+            
+            console.log(`تم إزالة الصفحة ${currentVisiblePage + 1} من DOM`);
         }
-    }, duration);
-
-    isOpen = false;
+    }
 }
 
-// ==================== زر التبديل ====================
-
-toggleBtn.addEventListener('click', () => {
-    isOpen ? closeSidebar(300) : openSidebar(300);
-});
-
-// ==================== تحقق من الحافة ====================
-
-function isDragFromLeftEdge(clientX) {
-    return clientX <= dragThreshold;
+// =======================================
+// تفريغ صورة من Canvas (معدلة)
+// =======================================
+function unloadImageFromCanvas(canvas, index) {
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    loadedPages.delete(index);
+    canvasReferences.delete(index);
+    
+    // إزالة أي عنصر تحميل متبقي عند تفريغ الكانفاس
+    const container = pageContainers[index];
+    if (container) {
+        const loadingDiv = container.querySelector('.page-loading');
+        if (loadingDiv) {
+            loadingDiv.remove();
+        }
+    }
 }
 
-// ==================== بدء السحب ====================
+// =======================================
+// عرض الصفحات (معدلة - بدون إضافة عنصر التحميل مسبقاً)
+// =======================================
+async function displayPages() {
+    pageView.innerHTML = '';
+    pageContainers = [];
+    loadedPages.clear();
+    canvasReferences.clear();
+    currentVisiblePage = -1; // إعادة تعيين الصفحة الحالية
 
-function startDrag(e) {
-    const isTouch = e.type.includes('touch');
-    const clientX = isTouch ? e.touches[0].clientX : e.clientX;
-    const clientY = isTouch ? e.touches[0].clientY : e.clientY;
+    for (let index = 0; index < images.length; index++) {
+        const container = document.createElement('div');
+        container.classList.add('page-container');
+        container.dataset.index = index;
 
-    // سحب من الحافة عند الإغلاق
-    if (!isOpen && isDragFromLeftEdge(clientX)) {
-        dragging = true;
-        startX = clientX;
-        currentX = clientX;
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d', { alpha: true });
 
-        sidebar.style.transition = 'none';
-        updateSidebarWidth();
-        sidebar.style.left = -sidebarWidth + 'px';
-        sidebar.classList.add('open');
+        const scaleFactor = 4;
+        canvas.width = 794 * scaleFactor;
+        canvas.height = 1123 * scaleFactor;
+        canvas.style.width = '794px';
+        canvas.style.height = '1123px';
 
-        document.addEventListener('mousemove', onDragFromEdge);
-        document.addEventListener('mouseup', endDragFromEdge);
-        document.addEventListener('touchmove', onDragFromEdge, { passive: false });
-        document.addEventListener('touchend', endDragFromEdge);
+        container.appendChild(canvas);
+        
+        // ❌ لم نعد نضيف عنصر التحميل هنا
+        // سيتم إضافته فقط عند الحاجة في loadImageIntoCanvas
+        
+        pageView.appendChild(container);
+        pageContainers.push(container);
+    }
+
+    if (images.length > 0) {
+        await loadImageIntoCanvas(pageContainers[0].querySelector('canvas'), images[0], 0);
+    }
+}
+
+// =======================================
+// التحقق إذا كانت الصورة بيضاء بالكامل
+// =======================================
+function isImageWhite(img) {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = img.width;
+    canvas.height = img.height;
+    ctx.drawImage(img, 0, 0);
+    
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+    
+    let whitePixels = 0;
+    const totalPixels = data.length / 4;
+    
+    for (let i = 0; i < data.length; i += 40) {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        const a = data[i + 3];
+        
+        if (r > 250 && g > 250 && b > 250 && a > 250) {
+            whitePixels++;
+        }
+    }
+    
+    return (whitePixels / (totalPixels / 10)) > 0.9;
+}
+
+// =======================================
+// معالجة التمرير (معدلة للتمرير السريع مع كشف التوقف)
+// =======================================
+function handleScroll() {
+    const currentScrollTop = pageView.scrollTop;
+    
+    // تحديد اتجاه التمرير
+    scrollDirection = currentScrollTop > lastScrollTop ? 'down' : 'up';
+    lastScrollTop = currentScrollTop;
+    
+    // زيادة عداد التمرير السريع
+    fastScrollCount++;
+    
+    // منع التحميل أثناء التمرير
+    if (!isScrolling) {
+        isScrolling = true;
+        scrollStopDetected = false;
+    }
+    
+    // التحقق من توقف التمرير
+    if (Math.abs(currentScrollTop - lastScrollPosition) < 5) {
+        // إذا كان التمرير بطيئاً جداً أو متوقفاً
+        if (!scrollStopDetected) {
+            scrollStopDetected = true;
+            // تحميل الصفحة الحالية فوراً إذا كان التمرير بطيئاً
+            loadCurrentPage();
+        }
+    }
+    lastScrollPosition = currentScrollTop;
+    
+    // إعادة تعيين المؤقت في كل مرة يتحرك فيها المستخدم
+    clearTimeout(scrollTimeout);
+    clearTimeout(touchEndTimeout);
+    
+    // انتظار حتى يتوقف التمرير
+    scrollTimeout = setTimeout(() => {
+        // التحقق من أن المستخدم توقف بالفعل عن التمرير
+        if (!isTouching) {
+            handleScrollEnd();
+        }
+    }, 10);
+    
+    // تحديث العنصر النشط أثناء التمرير (بدون تحميل)
+    updateSidebarActive(getCurrentPageIndex());
+}
+
+// =======================================
+// تحميل الصفحة الحالية (معدلة)
+// =======================================
+function loadCurrentPage() {
+    const centerIndex = getCenterPageIndex();
+    if (centerIndex >= 0 && centerIndex < images.length) {
+        if (!loadedPages.has(centerIndex) || currentVisiblePage !== centerIndex) {
+            console.log(`تحميل الصفحة ${centerIndex + 1} فور توقف التمرير`);
+            const container = pageContainers[centerIndex];
+            const canvas = container.querySelector('canvas');
+            
+            // التأكد من عدم وجود عنصر تحميل قديم قبل البدء
+            const oldLoadingDiv = container.querySelector('.page-loading');
+            if (oldLoadingDiv) {
+                oldLoadingDiv.remove();
+            }
+            
+            loadImageIntoCanvas(canvas, images[centerIndex], centerIndex);
+        }
+    }
+}
+
+// =======================================
+// معالجة بداية اللمس
+// =======================================
+function handleTouchStart() {
+    isTouching = true;
+    isScrolling = true;
+    fastScrollCount = 0;
+    scrollStopDetected = false;
+}
+
+// =======================================
+// معالجة حركة اللمس (مضافة جديدة)
+// =======================================
+function handleTouchMove() {
+    // إعادة تعيين مؤقت التوقف
+    clearTimeout(touchEndTimeout);
+    scrollStopDetected = false;
+}
+
+// =======================================
+// معالجة نهاية اللمس (محدثة)
+// =======================================
+function handleTouchEnd() {
+    isTouching = false;
+    
+    // تحميل الصفحة الحالية فور رفع اللمس
+    loadCurrentPage();
+    
+    // انتظر قليلاً للتأكد من أن المستخدم لا يزال في نفس المكان
+    touchEndTimeout = setTimeout(() => {
+        if (!isScrolling) {
+            handleScrollEnd();
+        } else {
+            // إذا كان لا يزال في وضع التمرير، انتظر أكثر
+            setTimeout(() => {
+                if (!isScrolling && !isTouching) {
+                    handleScrollEnd();
+                }
+            }, 50);
+        }
+    }, 100);
+}
+
+// =======================================
+// التحقق إذا كانت الصفحة مرئية
+// =======================================
+function isPageVisible(index) {
+    const container = pageContainers[index];
+    if (!container) return false;
+    
+    const viewportHeight = pageView.clientHeight;
+    const scrollTop = pageView.scrollTop;
+    const containerTop = container.offsetTop;
+    const containerBottom = containerTop + container.offsetHeight;
+    
+    return (containerBottom >= scrollTop && containerTop <= scrollTop + viewportHeight);
+}
+
+// =======================================
+// الحصول على الصفحة المركزية في الشاشة
+// =======================================
+function getCenterPageIndex() {
+    const viewportHeight = pageView.clientHeight;
+    const scrollTop = pageView.scrollTop;
+    const viewportCenter = scrollTop + viewportHeight / 2;
+    
+    let centerIndex = 0;
+    let minDistance = Infinity;
+    
+    pageContainers.forEach((container, index) => {
+        const containerTop = container.offsetTop;
+        const containerBottom = containerTop + container.offsetHeight;
+        const containerCenter = (containerTop + containerBottom) / 2;
+        
+        const distance = Math.abs(containerCenter - viewportCenter);
+        
+        if (distance < minDistance) {
+            minDistance = distance;
+            centerIndex = index;
+        }
+    });
+    
+    return centerIndex;
+}
+
+// =======================================
+// معالجة نهاية التمرير (تحميل الصفحة المركزية فقط)
+// =======================================
+function handleScrollEnd() {
+    if (fastScrollCount > 10) {
+        console.log('تمرير سريع detected, تحميل الصفحة المركزية فقط');
+    }
+    
+    // تحميل الصفحة المركزية
+    loadCurrentPage();
+    
+    // إعادة تعيين المتغيرات
+    isScrolling = false;
+    fastScrollCount = 0;
+    scrollStopDetected = false;
+    
+    // تحديث العنصر النشط
+    updateSidebarActive(getCenterPageIndex());
+}
+
+// =======================================
+// الحصول على رقم الصفحة الحالية
+// =======================================
+function getCurrentPageIndex() {
+    let viewMiddle = pageView.scrollTop + pageView.clientHeight / 2;
+    let closestIndex = 0;
+    let minDist = Infinity;
+
+    pageContainers.forEach((container, i) => {
+        const containerMiddle = container.offsetTop + container.offsetHeight / 2;
+        const dist = Math.abs(containerMiddle - viewMiddle);
+
+        if (dist < minDist) {
+            minDist = dist;
+            closestIndex = i;
+        }
+    });
+
+    return closestIndex;
+}
+
+// =======================================
+// التمرير إلى صفحة (معدلة للتحميل المباشر)
+// =======================================
+function scrollToPage(index) {
+
+    const container = pageContainers[index];
+    if (!container) return;
+
+    // إلغاء أي مؤقتات تمرير
+    clearTimeout(scrollTimeout);
+    clearTimeout(touchEndTimeout);
+
+    // منع نظام التمرير من العمل أثناء الانتقال
+    isScrolling = true;
+    isTouching = false;
+
+    // ❌ لا نقوم بتحميل الصورة هنا إطلاقاً
+    // سيتم تحميلها تلقائياً عند توقف التمرير
+
+    container.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start'
+    });
+
+    updateSidebarActive(index);
+
+    // بعد انتهاء التمرير نسمح للنظام بتحميل الصفحة
+    setTimeout(() => {
+        isScrolling = false;
+        handleScrollEnd(); // هذا سيحمّل الصفحة المركزية فقط
+    }, 10);
+}
+
+// =======================================
+// تحديث العنصر النشط (معدل)
+// =======================================
+function updateSidebarActive(index) {
+    Array.from(sidebar.children).forEach((el, i) => {
+        if (i === index) {
+            el.classList.add('active');
+            // تمرير الشريط الجانبي بسلاسة
+            el.scrollIntoView({
+                behavior: 'smooth',
+                block: 'center'
+            });
+        } else {
+            el.classList.remove('active');
+        }
+    });
+}
+
+// =======================================
+// تحويل الصورة إلى DataURL
+// =======================================
+async function imageToProcessedDataURL(imgSrc, preserveTransparency = true) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.src = imgSrc;
+        
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            
+            const ctx = canvas.getContext('2d', { alpha: preserveTransparency });
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            if (!preserveTransparency) {
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+            
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            
+            if (preserveTransparency) {
+                resolve(canvas.toDataURL('image/png'));
+            } else {
+                resolve(canvas.toDataURL('image/jpeg', 1.0));
+            }
+        };
+        
+        img.onerror = reject;
+    });
+}
+
+// =======================================
+// إنشاء PDF (معدل للسرعة مع تقليل التأخير)
+// =======================================
+async function generatePDFBlob(progressCallback) {
+    const { jsPDF } = window.jspdf;
+
+    const pdf = new jsPDF({
+        orientation: 'p',
+        unit: 'in',
+        format: [6, 9],
+        compress: true
+    });
+
+    const pageWidth = 6;
+    const pageHeight = 9;
+    const marginTop = 0.5;
+    const marginBottom = 0.75;
+    const marginOuter = 0.5;
+    const marginInner = 0.75;
+
+    // حساب حجم الدفعات (batch size) للصور الكبيرة
+    const batchSize = images.length > 50 ? 5 : (images.length > 30 ? 3 : 1);
+    
+    for (let i = 0; i < images.length; i++) {
+        if (stopPDFGeneration) {
+            throw new Error('PDF generation stopped by user');
+        }
+        
+        // تحديث التقدم بشكل أقل تكراراً للصور الكثيرة
+        if (progressCallback) {
+            const progress = Math.floor(((i + 1) / images.length) * 100);
+            
+            // للصور الكثيرة، نحدث التقدم كل بضع صور
+            if (images.length > 50) {
+                if (i % 5 === 0 || i === images.length - 1) {
+                    progressCallback(progress);
+                }
+            } else if (images.length > 30) {
+                if (i % 3 === 0 || i === images.length - 1) {
+                    progressCallback(progress);
+                }
+            } else {
+                progressCallback(progress);
+            }
+            
+            // تقليل التأخير بشكل كبير
+            await delay(10);
+        }
+
+        try {
+            const imgSrc = images[i];
+            
+            if (stopPDFGeneration) {
+                throw new Error('PDF generation stopped by user');
+            }
+            
+            const isPNG = imgSrc.startsWith('data:image/png');
+            
+            // معالجة الصور بشكل أسرع
+            let processedSrc;
+            if (i % batchSize === 0) {
+                // معالجة دفعة من الصور
+                processedSrc = await imageToProcessedDataURL(imgSrc, isPNG);
+            } else {
+                // استخدام معالجة أسرع للصور المتتالية
+                processedSrc = await imageToProcessedDataURL(imgSrc, isPNG);
+            }
+            
+            const isEven = (i + 1) % 2 === 0;
+            const marginLeft = isEven ? marginOuter : marginInner;
+            const marginRight = isEven ? marginInner : marginOuter;
+
+            const contentWidth = pageWidth - marginLeft - marginRight;
+            const contentHeight = pageHeight - marginTop - marginBottom;
+
+            const img = new Image();
+            img.src = processedSrc;
+
+            await new Promise((res, rej) => {
+                img.onload = res;
+                img.onerror = rej;
+            });
+
+            const ratio = Math.min(
+                contentWidth / (img.width / 300),
+                contentHeight / (img.height / 300)
+            );
+
+            const w = (img.width / 300) * ratio;
+            const h = (img.height / 300) * ratio;
+            const x = marginLeft + (contentWidth - w) / 2;
+            const y = marginTop + (contentHeight - h) / 2;
+
+            pdf.addImage(processedSrc, 'JPEG', x, y, w, h, undefined, 'FAST');
+
+            pdf.setFont("helvetica", "normal");
+            pdf.setFontSize(10);
+            pdf.setTextColor(128, 128, 128);
+            pdf.text(
+                String(i + 1),
+                pageWidth / 2,
+                pageHeight - 0.4,
+                { align: "center" }
+            );
+
+            if (i < images.length - 1) {
+                pdf.addPage();
+            }
+            
+        } catch (error) {
+            if (error.message === 'PDF generation stopped by user') {
+                throw error;
+            }
+            console.error(`Error processing image ${i + 1}:`, error);
+            
+            try {
+                const img = new Image();
+                img.src = images[i];
+                await new Promise((res, rej) => {
+                    img.onload = res;
+                    img.onerror = rej;
+                });
+                
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0);
+                
+                const fallbackSrc = canvas.toDataURL('image/jpeg', 0.95);
+                
+                const isEven = (i + 1) % 2 === 0;
+                const marginLeft = isEven ? marginOuter : marginInner;
+                const marginRight = isEven ? marginInner : marginOuter;
+                const contentWidth = pageWidth - marginLeft - marginRight;
+                const contentHeight = pageHeight - marginTop - marginBottom;
+                
+                const ratio = Math.min(
+                    contentWidth / (img.width / 300),
+                    contentHeight / (img.height / 300)
+                );
+                
+                const w = (img.width / 300) * ratio;
+                const h = (img.height / 300) * ratio;
+                const x = marginLeft + (contentWidth - w) / 2;
+                const y = marginTop + (contentHeight - h) / 2;
+                
+                pdf.addImage(fallbackSrc, 'JPEG', x, y, w, h, undefined, 'FAST');
+                
+                pdf.setFont("helvetica", "normal");
+                pdf.setFontSize(10);
+                pdf.setTextColor(128, 128, 128);
+                pdf.text(String(i + 1), pageWidth / 2, pageHeight - 0.4, { align: "center" });
+                
+                if (i < images.length - 1) pdf.addPage();
+                
+            } catch (fallbackError) {
+                if (fallbackError.message === 'PDF generation stopped by user') {
+                    throw fallbackError;
+                }
+                console.error(`Fallback also failed for image ${i + 1}:`, fallbackError);
+                throw new Error(`Failed to process image ${i + 1}`);
+            }
+        }
+    }
+
+    return pdf.output('blob');
+}
+
+// =======================================
+// إنشاء PDF مسبقاً
+// =======================================
+async function preGeneratePDF() {
+    if (images.length === 0 || isPreGeneratingPDF) return;
+    
+    isPreGeneratingPDF = true;
+    console.log('بدء إنشاء PDF مسبقاً...');
+    
+    // إظهار Shimmer على زر المشاركة والتنزيل فقط
+    showShimmer(document.getElementById('share-button'));
+    showShimmer(document.getElementById('download-button'));
+    
+    try {
+        const oldStopGeneration = stopPDFGeneration;
+        stopPDFGeneration = false;
+        
+        cachedPDFBlob = await generatePDFBlob((progress) => {
+            console.log(`تقدم إنشاء PDF المسبق: ${progress}%`);
+        });
+        
+        stopPDFGeneration = oldStopGeneration;
+        
+        console.log('تم إنشاء PDF مسبقاً بنجاح');
+        
+    } catch (error) {
+        console.error('فشل إنشاء PDF المسبق:', error);
+        cachedPDFBlob = null;
+    } finally {
+        isPreGeneratingPDF = false;
+        checkPDFReady();
+    }
+}
+
+// =======================================
+// تنزيل PDF (معدل للسرعة)
+// =======================================
+async function downloadPDF() {
+    // التحقق من أن الزر مفعل
+    if (!isDownloadButtonReady) {
+        alert('الرجاء الانتظار حتى اكتمال تجهيز الملف');
+        return;
+    }
+    
+    const btn = document.getElementById('download-button');
+    const stopBtn = document.getElementById('stop-bar');
+    
+    // تعطيل الزر مؤقتاً
+    btn.disabled = true;
+    btn.style.opacity = '0.5';
+    
+    stopBtn.disabled = false;
+    stopBtn.style.opacity = '1';
+    
+    stopPDFGeneration = false;
+    isGeneratingPDF = true;
+
+    const fileName = prompt("أدخل اسم الملف قبل التنزيل:", "Amazon-KDP-Book");
+
+    if (!fileName) {
+        // إعادة تفعيل الزر إذا ألغى المستخدم
+        checkPDFReady();
+        stopBtn.disabled = true;
+        stopBtn.style.opacity = '0.5';
+        isGeneratingPDF = false;
         return;
     }
 
-    // عند الفتح
-    if (isOpen && sidebar.contains(e.target)) {
-        dragging = true;
-        startX = clientX;
-        startY = clientY;
-        currentX = clientX;
-        startScrollTop = sidebar.scrollTop;
+    progressContainer.style.display = 'block';
+    progressBar.style.width = '0%';
+    progressText.textContent = '0%';
 
-        isVerticalDrag = false;
-        isHorizontalDrag = false;
-
-        sidebar.style.transition = 'none';
-        updateSidebarWidth();
-
-        document.addEventListener('mousemove', onDrag);
-        document.addEventListener('mouseup', endDrag);
-        document.addEventListener('touchmove', onDrag, { passive: false });
-        document.addEventListener('touchend', endDrag);
-    }
-}
-
-// ==================== سحب من الحافة ====================
-
-function onDragFromEdge(e) {
-    if (!dragging) return;
-
-    const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
-    let deltaX = clientX - startX;
-
-    if (deltaX > 0) {
-        let newLeft = Math.min(deltaX - sidebarWidth, 0);
-        sidebar.style.left = newLeft + 'px';
-        currentX = clientX;
-    }
-}
-
-function endDragFromEdge() {
-    if (!dragging) return;
-    dragging = false;
-
-    let moved = currentX - startX;
-    moved > 30 ? openSidebar(300) : closeSidebar(300);
-
-    document.removeEventListener('mousemove', onDragFromEdge);
-    document.removeEventListener('mouseup', endDragFromEdge);
-    document.removeEventListener('touchmove', onDragFromEdge);
-    document.removeEventListener('touchend', endDragFromEdge);
-}
-
-// ==================== سحب عند الفتح ====================
-
-function onDrag(e) {
-    if (!dragging) return;
-
-    const isTouch = e.type.includes('touch');
-    const clientX = isTouch ? e.touches[0].clientX : e.clientX;
-    const clientY = isTouch ? e.touches[0].clientY : e.clientY;
-
-    const deltaX = clientX - startX;
-    const deltaY = clientY - startY;
-
-    // تحديد الاتجاه أول مرة
-    if (!isVerticalDrag && !isHorizontalDrag) {
-        if (Math.abs(deltaY) > Math.abs(deltaX)) {
-            isVerticalDrag = true;
+    try {
+        let blob;
+        
+        if (cachedPDFBlob) {
+            console.log('استخدام PDF المخزن مؤقتاً');
+            blob = cachedPDFBlob;
+            
+            // محاكاة تقدم سريع جداً (5 خطوات فقط)
+            const steps = 5;
+            for (let i = 1; i <= steps; i++) {
+                const progress = Math.floor((i / steps) * 100);
+                progressBar.style.width = progress + '%';
+                progressText.textContent = progress + '%';
+                await delay(20);
+            }
         } else {
-            isHorizontalDrag = true;
+            // إنشاء PDF مع تقدم أسرع
+            blob = await generatePDFBlob((progress) => {
+                // تضخيم النسبة لتظهر أسرع للمستخدم
+                let amplifiedProgress = progress;
+                
+                // إذا كان عدد الصور كبيراً، نضخم النسبة أكثر
+                if (images.length > 30) {
+                    // تضخيم النسبة: مثلاً 50% حقيقي يصبح 80% في الواجهة
+                    amplifiedProgress = Math.min(95, Math.floor(progress * 1.5));
+                } else if (images.length > 20) {
+                    amplifiedProgress = Math.min(95, Math.floor(progress * 1.3));
+                } else if (images.length > 10) {
+                    amplifiedProgress = Math.min(95, Math.floor(progress * 1.2));
+                }
+                
+                progressBar.style.width = amplifiedProgress + '%';
+                progressText.textContent = amplifiedProgress + '%';
+            });
         }
-    }
 
-    // ================= سكرول عمودي =================
-    if (isVerticalDrag) {
-        e.preventDefault();
-        sidebar.scrollTop = startScrollTop - deltaY;
-    }
+        // قفزة سريعة إلى 100%
+        progressBar.style.width = '100%';
+        progressText.textContent = '100%';
+        await delay(100);
 
-    // ================= سحب أفقي =================
-    if (isHorizontalDrag && deltaX < 0) {
-        e.preventDefault();
-        let newLeft = Math.max(deltaX, -sidebarWidth);
-        sidebar.style.left = newLeft + 'px';
-        currentX = clientX;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName.endsWith('.pdf') ? fileName : fileName + '.pdf';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        setTimeout(preGeneratePDF, 500);
+
+    } catch (e) {
+        if (e.message === 'PDF generation stopped by user') {
+            progressText.textContent = 'تم الإيقاف';
+            await delay(500);
+        } else {
+            alert('فشل إنشاء PDF: ' + e.message);
+            console.error(e);
+        }
+    } finally {
+        progressContainer.style.display = 'none';
+        checkPDFReady();
+        stopBtn.disabled = true;
+        stopBtn.style.opacity = '0.5';
+        isGeneratingPDF = false;
     }
 }
 
-function endDrag() {
-    if (!dragging) return;
-    dragging = false;
-
-    let moved = currentX - startX;
-
-    if (isHorizontalDrag) {
-        moved < -30 ? closeSidebar(300) : openSidebar(300);
+// =======================================
+// مشاركة PDF (معدلة للسرعة)
+// =======================================
+async function sharePDF() {
+    // التحقق من أن الزر مفعل
+    if (!isShareButtonReady) {
+        alert('الرجاء الانتظار حتى اكتمال تجهيز الملف للمشاركة');
+        return;
+    }
+    
+    if (!navigator.share) {
+        alert('المتصفح لا يدعم المشاركة');
+        return;
     }
 
-    isVerticalDrag = false;
-    isHorizontalDrag = false;
+    const shareBtn = document.getElementById('share-button');
+    const stopBtn = document.getElementById('stop-bar');
+    
+    // تعطيل زر المشاركة فوراً لمنع النقر المتكرر
+    shareBtn.disabled = true;
+    shareBtn.style.opacity = '0.5';
+    
+    stopBtn.disabled = false;
+    stopBtn.style.opacity = '1';
+    
+    stopPDFGeneration = false;
+    isGeneratingPDF = true;
 
-    document.removeEventListener('mousemove', onDrag);
-    document.removeEventListener('mouseup', endDrag);
-    document.removeEventListener('touchmove', onDrag);
-    document.removeEventListener('touchend', endDrag);
+    progressContainer.style.display = 'block';
+    progressBar.style.width = '0%';
+    progressText.textContent = '0%';
+
+    try {
+        // يجب أن يكون PDF مخزناً مسبقاً
+        if (!cachedPDFBlob) {
+            alert('PDF غير جاهز للمشاركة بعد. الرجاء الانتظار.');
+            return;
+        }
+        
+        // محاكاة تقدم سريع جداً (3 خطوات فقط)
+        const steps = 3;
+        for (let i = 1; i <= steps; i++) {
+            const progress = Math.floor((i / steps) * 100);
+            progressBar.style.width = progress + '%';
+            progressText.textContent = progress + '%';
+            await delay(15);
+        }
+
+        progressBar.style.width = '100%';
+        progressText.textContent = 'اكتمل الإنشاء';
+        await delay(50);
+
+        // إنشاء كائن File
+        const file = new File([cachedPDFBlob], "Amazon-KDP-Book.pdf", {
+            type: "application/pdf"
+        });
+
+        // التحقق من دعم مشاركة الملفات
+        if (!navigator.canShare || !navigator.canShare({ files: [file] })) {
+            alert("مشاركة الملفات غير مدعومة في هذا المتصفح");
+            
+            if (confirm("هل تريد تنزيل الملف بدلاً من ذلك؟")) {
+                const url = URL.createObjectURL(cachedPDFBlob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = "Amazon-KDP-Book.pdf";
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }
+            return;
+        }
+
+        // مشاركة الملف
+        progressText.textContent = 'فتح قائمة المشاركة...';
+        await delay(50);
+        
+        await navigator.share({
+            title: "Amazon-KDP-Book",
+            text: "كتاب PDF جاهز للنشر على Amazon KDP",
+            files: [file]
+        });
+
+        progressText.textContent = 'تمت المشاركة بنجاح';
+        await delay(500);
+
+        // إنشاء PDF جديد في الخلفية (أسرع)
+        setTimeout(preGeneratePDF, 500);
+
+    } catch (err) {
+        if (err.message === 'PDF generation stopped by user') {
+            progressText.textContent = 'تم الإيقاف';
+            await delay(500);
+        } else if (err.name !== "AbortError") {
+            console.error('Share error:', err);
+            
+            if (err.message.includes('user gesture')) {
+                alert('خطأ في المشاركة: يرجى المحاولة مرة أخرى بعد ثانية');
+            } else {
+                alert('فشل المشاركة: ' + err.message);
+            }
+        }
+    } finally {
+        progressContainer.style.display = 'none';
+        stopBtn.disabled = true;
+        stopBtn.style.opacity = '0.5';
+        isGeneratingPDF = false;
+        
+        // إعادة تفعيل زر المشاركة بعد نصف ثانية
+        setTimeout(() => {
+            checkPDFReady();
+        }, 500);
+    }
 }
 
-// ==================== إضافة المستمعين ====================
+// =======================================
+// تشغيل التطبيق (معدل مع إضافة مستمعات اللمس المحسنة)
+// =======================================
+(async () => {
+    try {
+        // تعطيل الأزرار في البداية
+        setButtonsState(false, false);
+        
+        // إظهار Shimmer على الأزرار فقط
+        showShimmer(document.getElementById('share-button'));
+        showShimmer(document.getElementById('download-button'));
+        
+        // تحميل الصور من IndexedDB
+        await loadImagesFromDB();
+        
+        if (images.length === 0) {
+            pageView.innerHTML = '<div class="no-images">لا توجد صور. الرجاء العودة للصفحة <a href="index.html">الرئيسية</a> ورفع صور.</div>';
+            hideShimmer();
+            return;
+        }
+        
+        await displaySidebar();
+        await displayPages();
+        scrollToPage(0);
 
-document.addEventListener('mousedown', startDrag);
-document.addEventListener('touchstart', startDrag, { passive: false });
+        // إضافة مستمعات التمرير واللمس المحسنة
+        pageView.addEventListener('scroll', handleScroll);
+        pageView.addEventListener('touchstart', handleTouchStart);
+        pageView.addEventListener('touchmove', handleTouchMove);
+        pageView.addEventListener('touchend', handleTouchEnd);
+        
+        // مستمعات إضافية للموس
+        pageView.addEventListener('mousedown', () => {
+            isTouching = true;
+            isScrolling = true;
+            scrollStopDetected = false;
+        });
+        
+        pageView.addEventListener('mousemove', () => {
+            if (isTouching) {
+                // إعادة تعيين مؤقت التوقف أثناء حركة الماوس
+                clearTimeout(scrollTimeout);
+                scrollStopDetected = false;
+            }
+        });
+        
+        pageView.addEventListener('mouseup', () => {
+            isTouching = false;
+            // تحميل الصفحة الحالية فور رفع الماوس
+            loadCurrentPage();
+            setTimeout(() => {
+                if (!isScrolling) {
+                    handleScrollEnd();
+                }
+            }, 100);
+        });
+        
+        pageView.addEventListener('mouseleave', () => {
+            if (isTouching) {
+                isTouching = false;
+                loadCurrentPage();
+                handleScrollEnd();
+            }
+        });
+        
+        // مستمع لعجلة الماوس للكشف عن التمرير السريع
+        pageView.addEventListener('wheel', () => {
+            clearTimeout(scrollTimeout);
+            scrollStopDetected = false;
+        });
+        
+        setTimeout(handleScroll, 100);
 
-// إغلاق عند الضغط خارج السايد بار
-document.addEventListener('click', (e) => {
-    if (isOpen && !sidebar.contains(e.target) && e.target !== toggleBtn) {
-        closeSidebar(500);
+        // بدء إنشاء PDF مسبقاً
+        setTimeout(preGeneratePDF, 2000);
+
+        document.getElementById('share-button').addEventListener('click', sharePDF);
+        document.getElementById('download-button').addEventListener('click', downloadPDF);
+        
+        const stopBtn = document.getElementById('stop-bar');
+        if (stopBtn) {
+            stopBtn.addEventListener('click', stopPDF);
+            stopBtn.disabled = true;
+            stopBtn.style.opacity = '0.5';
+        }
+        
+    } catch (error) {
+        console.error('Error initializing viewer:', error);
+        pageView.innerHTML = '<div class="error">حدث خطأ في تحميل الصور</div>';
+        hideShimmer();
     }
+})();
 });
-
-document.addEventListener('touchstart', (e) => {
-    if (isOpen && !sidebar.contains(e.target) && e.target !== toggleBtn) {
-        closeSidebar(500);
-    }
-}, { passive: false });
-
-// ==================== الحالة الابتدائية ====================
-
-setTimeout(() => {
-    closeSidebar(0);
-}, 100);
-</script>
-
-
-
-<!-- <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-          .then(reg => console.log('SW registered', reg))
-          .catch(err => console.log('SW registration failed', err));
-      });
-    }
-</script> -->
-
-<script src="viewer.js"></script>
-<script src="title.js"></script>
-
-<script src="zoom.js"></script>
-
-</body>
-</html>
