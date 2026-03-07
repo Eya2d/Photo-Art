@@ -67,11 +67,17 @@ function hideShimmer() {
 }
 
 // =======================================
-// دالة لتفعيل/تعطيل الأزرار الرئيسية
+// دالة لتفعيل/تعطيل الأزرار الرئيسية (معدلة)
 // =======================================
-function setButtonsState(shareState, downloadState) {
+function setButtonsState(shareState, downloadState, preserveExisting = true) {
     const shareBtn = document.getElementById('share-button');
     const downloadBtn = document.getElementById('download-button');
+    
+    if (preserveExisting && cachedPDFBlob !== null) {
+        // إذا كان لدينا PDF مخزن، نفعّل الأزرار دائماً
+        shareState = true;
+        downloadState = true;
+    }
     
     if (shareBtn) {
         shareBtn.disabled = !shareState;
@@ -90,7 +96,7 @@ function setButtonsState(shareState, downloadState) {
 }
 
 // =======================================
-// دالة للتحقق من جاهزية PDF
+// دالة للتحقق من جاهزية PDF (معدلة)
 // =======================================
 function checkPDFReady() {
     // زر التنزيل يصبح جاهزاً إذا كان هناك PDF مخزن أو إذا انتهى التحميل المسبق
@@ -99,7 +105,12 @@ function checkPDFReady() {
     // زر المشاركة يحتاج إلى PDF مخزن فقط (لضمان التفاعل المباشر)
     const shareReady = cachedPDFBlob !== null;
     
-    setButtonsState(shareReady, downloadReady);
+    // لا نعيد تعيين الأزرار إذا كانت مفعلة بالفعل ولديها PDF
+    if (cachedPDFBlob !== null) {
+        setButtonsState(true, true);
+    } else {
+        setButtonsState(shareReady, downloadReady);
+    }
     
     if (shareReady || downloadReady) {
         hideShimmer();
@@ -192,7 +203,7 @@ async function displaySidebar() {
         item.classList.add('sidebar-item');
         if (index === 0) item.classList.add('active');
 
-        const inner = document.createElement('div');
+        const inner = document.createElement('button');
         inner.classList.add('sidebar-item-inner', 'Wave-cloud');
         
         // ★★★ ضمان عدم إزالة الصورة من الكانفا ★★★
@@ -899,7 +910,7 @@ async function preGeneratePDF() {
 }
 
 // =======================================
-// تنزيل PDF (معدل للسرعة)
+// تنزيل PDF (معدل - يحافظ على حالة الأزرار)
 // =======================================
 async function downloadPDF() {
     // التحقق من أن الزر مفعل
@@ -908,12 +919,17 @@ async function downloadPDF() {
         return;
     }
     
-    const btn = document.getElementById('download-button');
+    const downloadBtn = document.getElementById('download-button');
+    const shareBtn = document.getElementById('share-button');
     const stopBtn = document.getElementById('stop-bar');
     
-    // تعطيل الزر مؤقتاً
-    btn.disabled = true;
-    btn.style.opacity = '0.5';
+    // تعطيل زر التنزيل فقط مؤقتاً
+    downloadBtn.disabled = true;
+    downloadBtn.style.opacity = '0.5';
+    
+    // نترك زر المشاركة مفعلاً
+    shareBtn.disabled = false;
+    shareBtn.style.opacity = '1';
     
     stopBtn.disabled = false;
     stopBtn.style.opacity = '1';
@@ -924,8 +940,9 @@ async function downloadPDF() {
     const fileName = prompt("أدخل اسم الملف قبل التنزيل:", "Amazon-KDP-Book");
 
     if (!fileName) {
-        // إعادة تفعيل الزر إذا ألغى المستخدم
-        checkPDFReady();
+        // إعادة تفعيل زر التنزيل فقط إذا ألغى المستخدم
+        downloadBtn.disabled = false;
+        downloadBtn.style.opacity = '1';
         stopBtn.disabled = true;
         stopBtn.style.opacity = '0.5';
         isGeneratingPDF = false;
@@ -959,7 +976,6 @@ async function downloadPDF() {
                 
                 // إذا كان عدد الصور كبيراً، نضخم النسبة أكثر
                 if (images.length > 30) {
-                    // تضخيم النسبة: مثلاً 50% حقيقي يصبح 80% في الواجهة
                     amplifiedProgress = Math.min(95, Math.floor(progress * 1.5));
                 } else if (images.length > 20) {
                     amplifiedProgress = Math.min(95, Math.floor(progress * 1.3));
@@ -986,7 +1002,8 @@ async function downloadPDF() {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
 
-        setTimeout(preGeneratePDF, 500);
+        // لا نقوم بإنشاء PDF جديد تلقائياً - نترك المستخدم يقرر
+        // setTimeout(preGeneratePDF, 500);
 
     } catch (e) {
         if (e.message === 'PDF generation stopped by user') {
@@ -998,15 +1015,26 @@ async function downloadPDF() {
         }
     } finally {
         progressContainer.style.display = 'none';
-        checkPDFReady();
+        
+        // إعادة تفعيل زر التنزيل فقط
+        downloadBtn.disabled = false;
+        downloadBtn.style.opacity = '1';
+        
         stopBtn.disabled = true;
         stopBtn.style.opacity = '0.5';
         isGeneratingPDF = false;
+        
+        // التحقق من حالة الأزرار مع الحفاظ على التفعيل
+        if (cachedPDFBlob !== null) {
+            setButtonsState(true, true);
+        } else {
+            checkPDFReady();
+        }
     }
 }
 
 // =======================================
-// مشاركة PDF (معدلة للسرعة)
+// مشاركة PDF (معدلة - تحافظ على حالة الأزرار)
 // =======================================
 async function sharePDF() {
     // التحقق من أن الزر مفعل
@@ -1021,11 +1049,16 @@ async function sharePDF() {
     }
 
     const shareBtn = document.getElementById('share-button');
+    const downloadBtn = document.getElementById('download-button');
     const stopBtn = document.getElementById('stop-bar');
     
-    // تعطيل زر المشاركة فوراً لمنع النقر المتكرر
+    // تعطيل زر المشاركة فقط مؤقتاً لمنع النقر المتكرر
     shareBtn.disabled = true;
     shareBtn.style.opacity = '0.5';
+    
+    // نترك زر التنزيل مفعلاً
+    downloadBtn.disabled = false;
+    downloadBtn.style.opacity = '1';
     
     stopBtn.disabled = false;
     stopBtn.style.opacity = '1';
@@ -1092,8 +1125,8 @@ async function sharePDF() {
         progressText.textContent = 'تمت المشاركة بنجاح';
         await delay(500);
 
-        // إنشاء PDF جديد في الخلفية (أسرع)
-        setTimeout(preGeneratePDF, 500);
+        // لا نقوم بإنشاء PDF جديد تلقائياً - نترك المستخدم يقرر
+        // setTimeout(preGeneratePDF, 500);
 
     } catch (err) {
         if (err.message === 'PDF generation stopped by user') {
@@ -1114,10 +1147,16 @@ async function sharePDF() {
         stopBtn.style.opacity = '0.5';
         isGeneratingPDF = false;
         
-        // إعادة تفعيل زر المشاركة بعد نصف ثانية
-        setTimeout(() => {
+        // إعادة تفعيل زر المشاركة فقط (مع الحفاظ على حالة زر التنزيل)
+        shareBtn.disabled = false;
+        shareBtn.style.opacity = '1';
+        
+        // التحقق من حالة الأزرار مع الحفاظ على التفعيل
+        if (cachedPDFBlob !== null) {
+            setButtonsState(true, true);
+        } else {
             checkPDFReady();
-        }, 500);
+        }
     }
 }
 
@@ -1126,8 +1165,8 @@ async function sharePDF() {
 // =======================================
 (async () => {
     try {
-        // تعطيل الأزرار في البداية
-        setButtonsState(false, false);
+        // تعطيل الأزرار في البداية مع عدم الحفظ المسبق
+        setButtonsState(false, false, false);
         
         // إظهار Shimmer على الأزرار فقط
         showShimmer(document.getElementById('share-button'));
