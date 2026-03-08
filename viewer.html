@@ -508,12 +508,14 @@ let currentX = 0;
 let dragging = false;
 let sidebarWidth = 0;
 let dragThreshold = 0;
-let closeDragThreshold = 50; // المسافة المسموح بها من الحافة اليمنى للإغلاق
+let closeDragThreshold = 50;
 
 let isVerticalDrag = false;
 let isHorizontalDrag = false;
 let startScrollTop = 0;
-let lastY = 0; // لتتبع آخر نقطة لمس
+let lastY = 0;
+let dragStarted = false;
+let touchIdentifier = null; // لتتبع اللمسة المحددة
 
 // ==================== تحديث العرض ====================
 
@@ -580,76 +582,215 @@ function isDragFromRightEdge(clientX) {
     const sidebarRect = sidebar.getBoundingClientRect();
     const dragStartX = clientX - sidebarRect.left;
     
-    // التحقق إذا كانت نقطة اللمس في أول 40px من اليمين
     return dragStartX >= (sidebarWidth - closeDragThreshold) && dragStartX <= sidebarWidth;
 }
 
 // ==================== بدء السحب ====================
 
 function startDrag(e) {
-    // منع السلوك الافتراضي فقط للأحداث التي نريد التحكم بها
-    if (e.type === 'touchstart' && isOpen) {
-        // لا نمنع السلوك الافتراضي هنا لنسمح بالسكرول
+    // للماوس
+    if (e.type === 'mousedown') {
+        const clientX = e.clientX;
+        const clientY = e.clientY;
+
+        if (!isOpen && isDragFromLeftEdge(clientX)) {
+            e.preventDefault();
+            initDrag(e, clientX, clientY);
+            return;
+        }
+
+        if (isOpen && sidebar.contains(e.target) && isDragFromRightEdge(clientX)) {
+            e.preventDefault();
+            initDrag(e, clientX, clientY);
+        }
     }
-
-    const isTouch = e.type.includes('touch');
-    const clientX = isTouch ? e.touches[0].clientX : e.clientX;
-    const clientY = isTouch ? e.touches[0].clientY : e.clientY;
-
-    // سحب من الحافة عند الإغلاق
-    if (!isOpen && isDragFromLeftEdge(clientX)) {
-        e.preventDefault(); // نمنع السلوك الافتراضي فقط عند سحب القائمة
-        dragging = true;
+    
+    // للمس
+    if (e.type === 'touchstart') {
+        const touch = e.touches[0];
+        const clientX = touch.clientX;
+        const clientY = touch.clientY;
+        touchIdentifier = touch.identifier;
+        
+        // نخزن معلومات بدء اللمس
         startX = clientX;
-        currentX = clientX;
+        startY = clientY;
+        startScrollTop = sidebar.scrollTop;
+        dragStarted = false;
+        isVerticalDrag = false;
+        isHorizontalDrag = false;
+        
+        // نحدد ما إذا كان هذا سحباً محتملاً من الحافة
+        const isLeftEdgeDrag = !isOpen && isDragFromLeftEdge(clientX);
+        const isRightEdgeDrag = isOpen && sidebar.contains(e.target) && isDragFromRightEdge(clientX);
+        
+        if (isLeftEdgeDrag || isRightEdgeDrag) {
+            // نضيف مستمعي الحركة مع خيار منع السلوك
+            document.addEventListener('touchmove', onTouchMove, { passive: false });
+            document.addEventListener('touchend', onTouchEnd);
+            document.addEventListener('touchcancel', onTouchCancel);
+        }
+    }
+}
 
-        sidebar.style.transition = 'none';
-        updateSidebarWidth();
+function initDrag(e, clientX, clientY) {
+    dragging = true;
+    startX = clientX;
+    startY = clientY;
+    lastY = clientY;
+    currentX = clientX;
+    startScrollTop = sidebar.scrollTop;
+
+    isVerticalDrag = false;
+    isHorizontalDrag = false;
+
+    sidebar.style.transition = 'none';
+    updateSidebarWidth();
+    
+    if (!isOpen) {
         sidebar.style.left = -sidebarWidth + 'px';
         sidebar.classList.add('open');
-
-        document.addEventListener('mousemove', onDragFromEdge);
-        document.addEventListener('mouseup', endDragFromEdge);
-        document.addEventListener('touchmove', onDragFromEdge, { passive: false });
-        document.addEventListener('touchend', endDragFromEdge);
-        return;
     }
 
-    // عند الفتح - السماح بالسحب فقط من الحافة اليمنى
-    if (isOpen && sidebar.contains(e.target)) {
-        // التحقق من أن السحب يبدأ من الحافة اليمنى فقط
-        if (isDragFromRightEdge(clientX)) {
-            e.preventDefault(); // نمنع السلوك الافتراضي فقط عند سحب القائمة من الحافة
-            dragging = true;
-            startX = clientX;
-            startY = clientY;
-            lastY = clientY;
-            currentX = clientX;
-            startScrollTop = sidebar.scrollTop;
+    if (e.type === 'mousedown') {
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', endDrag);
+    }
+}
 
-            isVerticalDrag = false;
-            isHorizontalDrag = false;
+// دالة منفصلة للماوس
+function onMouseMove(e) {
+    onDrag(e, e.clientX, e.clientY);
+}
 
-            sidebar.style.transition = 'none';
-            updateSidebarWidth();
-
-            document.addEventListener('mousemove', onDrag);
-            document.addEventListener('mouseup', endDrag);
-            document.addEventListener('touchmove', onDrag, { passive: false });
-            document.addEventListener('touchend', endDrag);
+// دالة محسنة لمعالجة حركة اللمس
+function onTouchMove(e) {
+    // نتأكد أن هذه هي نفس اللمسة
+    let touch = null;
+    for (let i = 0; i < e.touches.length; i++) {
+        if (e.touches[i].identifier === touchIdentifier) {
+            touch = e.touches[i];
+            break;
         }
-        // إذا لم يكن السحب من الحافة اليمنى، نسمح بالسكرول العادي
-        // لا نفعل شيئاً، نترك المتصفح يتعامل مع السكرول بشكل طبيعي
     }
+    
+    if (!touch) return;
+    
+    const clientX = touch.clientX;
+    const clientY = touch.clientY;
+    
+    // إذا لم نبدأ السحب بعد، نحدد الاتجاه
+    if (!dragging && !dragStarted) {
+        const deltaX = clientX - startX;
+        const deltaY = clientY - startY;
+        
+        // ننتظر حتى نتحرك 5 بكسل على الأقل
+        if (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5) {
+            if (Math.abs(deltaX) > Math.abs(deltaY)) {
+                // حركة أفقية - نريد منع السكرول
+                // نتأكد أننا نستطيع منع الحدث قبل محاولة منعه
+                if (!e.cancelable) {
+                    // إذا لم يكن الحدث قابلاً للإلغاء، ننهي المعالجة
+                    cleanupTouchListeners();
+                    return;
+                }
+                
+                e.preventDefault();
+                dragStarted = true;
+                dragging = true;
+                currentX = clientX;
+                
+                sidebar.style.transition = 'none';
+                updateSidebarWidth();
+                
+                if (!isOpen) {
+                    sidebar.style.left = -sidebarWidth + 'px';
+                    sidebar.classList.add('open');
+                }
+                
+                // نسمي onDrag مع البيانات
+                onDrag(e, clientX, clientY, true);
+            } else {
+                // حركة عمودية - نسمح بالسكرول ولا نمنع الحدث
+                dragStarted = true;
+                // لا نستخدم preventDefault
+                onDrag(e, clientX, clientY, false);
+            }
+        }
+    } else if (dragging) {
+        // إذا كنا نسحب بالفعل
+        onDrag(e, clientX, clientY, isHorizontalDrag);
+    }
+}
+
+// دالة onDrag محسنة
+function onDrag(e, clientX, clientY, canPrevent = false) {
+    if (!dragging) return;
+
+    const deltaX = clientX - startX;
+    const deltaY = clientY - startY;
+
+    // تحديد الاتجاه إذا لم يتم تحديده بعد
+    if (!isVerticalDrag && !isHorizontalDrag) {
+        if (Math.abs(deltaY) > Math.abs(deltaX)) {
+            isVerticalDrag = true;
+            isHorizontalDrag = false;
+        } else {
+            isHorizontalDrag = true;
+            isVerticalDrag = false;
+        }
+    }
+
+    // ================= سكرول عمودي =================
+    if (isVerticalDrag) {
+        sidebar.scrollTop = startScrollTop + (startY - clientY);
+        // لا نستخدم preventDefault أبداً في الوضع العمودي
+    }
+
+    // ================= سحب أفقي =================
+    if (isHorizontalDrag && deltaX < 0) {
+        // فقط نحاول منع الحدث إذا كان مسموحاً به وكنا في الوضع الأفقي
+        if (canPrevent && e.cancelable) {
+            e.preventDefault();
+        }
+        let newLeft = Math.max(deltaX, -sidebarWidth);
+        sidebar.style.left = newLeft + 'px';
+        currentX = clientX;
+    }
+}
+
+function onTouchEnd(e) {
+    if (dragging) {
+        endDrag();
+    }
+    cleanupTouchListeners();
+}
+
+function onTouchCancel(e) {
+    cleanupTouchListeners();
+}
+
+function cleanupTouchListeners() {
+    document.removeEventListener('touchmove', onTouchMove);
+    document.removeEventListener('touchend', onTouchEnd);
+    document.removeEventListener('touchcancel', onTouchCancel);
+    dragging = false;
+    dragStarted = false;
+    touchIdentifier = null;
 }
 
 // ==================== سحب من الحافة ====================
 
 function onDragFromEdge(e) {
     if (!dragging) return;
-    e.preventDefault(); // منع السلوك الافتراضي أثناء السحب
-
+    
     const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+    
+    // فقط نحاول منع الحدث إذا كان قابلاً للإلغاء
+    if (e.cancelable) {
+        e.preventDefault();
+    }
+    
     let deltaX = clientX - startX;
 
     if (deltaX > 0) {
@@ -672,69 +813,33 @@ function endDragFromEdge() {
     document.removeEventListener('touchend', endDragFromEdge);
 }
 
-// ==================== سحب عند الفتح ====================
-
-function onDrag(e) {
-    if (!dragging) return;
-
-    const isTouch = e.type.includes('touch');
-    const clientX = isTouch ? e.touches[0].clientX : e.clientX;
-    const clientY = isTouch ? e.touches[0].clientY : e.clientY;
-
-    const deltaX = clientX - startX;
-    const deltaY = clientY - startY;
-
-    // تحديد الاتجاه أول مرة
-    if (!isVerticalDrag && !isHorizontalDrag) {
-        if (Math.abs(deltaY) > Math.abs(deltaX)) {
-            isVerticalDrag = true;
-        } else {
-            isHorizontalDrag = true;
-        }
-    }
-
-    // ================= سكرول عمودي =================
-    if (isVerticalDrag) {
-        // نسمح بالسكرول الطبيعي بدون منع السلوك الافتراضي
-        // فقط نقوم بتحديث موضع السكرول
-        sidebar.scrollTop = startScrollTop + (startY - clientY);
-        
-        // لا نستخدم preventDefault() هنا لنسمح للسكرول بالعمل بشكل طبيعي
-    }
-
-    // ================= سحب أفقي =================
-    if (isHorizontalDrag && deltaX < 0) {
-        e.preventDefault(); // نمنع السلوك الافتراضي فقط عند السحب الأفقي
-        let newLeft = Math.max(deltaX, -sidebarWidth);
-        sidebar.style.left = newLeft + 'px';
-        currentX = clientX;
-    }
-}
+// ==================== إنهاء السحب ====================
 
 function endDrag() {
     if (!dragging) return;
-    dragging = false;
-
+    
     let moved = currentX - startX;
 
     if (isHorizontalDrag) {
         moved < -30 ? closeSidebar(300) : openSidebar(300);
     }
 
+    dragging = false;
     isVerticalDrag = false;
     isHorizontalDrag = false;
+    dragStarted = false;
 
-    document.removeEventListener('mousemove', onDrag);
+    document.removeEventListener('mousemove', onMouseMove);
     document.removeEventListener('mouseup', endDrag);
-    document.removeEventListener('touchmove', onDrag);
-    document.removeEventListener('touchend', endDrag);
+    document.removeEventListener('touchmove', onTouchMove);
+    document.removeEventListener('touchend', onTouchEnd);
+    document.removeEventListener('touchcancel', onTouchCancel);
 }
 
 // ==================== إضافة المستمعين ====================
 
-// نستخدم { passive: true } للأحداث التي لا نريد منعها
 document.addEventListener('mousedown', startDrag);
-document.addEventListener('touchstart', startDrag, { passive: true }); // غيرنا إلى passive: true
+document.addEventListener('touchstart', startDrag, { passive: true });
 
 // إغلاق عند الضغط خارج السايد بار
 document.addEventListener('click', (e) => {
@@ -747,7 +852,7 @@ document.addEventListener('touchstart', (e) => {
     if (isOpen && !sidebar.contains(e.target) && e.target !== toggleBtn) {
         closeSidebar(500);
     }
-}, { passive: true }); // غيرنا إلى passive: true
+}, { passive: true });
 
 // ==================== الحالة الابتدائية ====================
 
@@ -755,9 +860,8 @@ setTimeout(() => {
     closeSidebar(0);
 }, 100);
 
-// ==================== إضافة مؤشر بصري لمنطقة السحب (اختياري) ====================
+// ==================== إضافة مؤشر بصري لمنطقة السحب ====================
 
-// لإظهار منطقة السحب بشكل مرئي للمستخدم
 function showDragArea() {
     if (isOpen) {
         sidebar.classList.add('drag-area-active');
@@ -768,7 +872,6 @@ function hideDragArea() {
     sidebar.classList.remove('drag-area-active');
 }
 
-// إضافة مستمعات الأحداث لإظهار/إخفاء منطقة السحب
 sidebar.addEventListener('mouseenter', showDragArea);
 sidebar.addEventListener('mouseleave', hideDragArea);
 sidebar.addEventListener('touchstart', showDragArea, { passive: true });
