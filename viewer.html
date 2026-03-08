@@ -27,6 +27,9 @@ body {
 button,a,div,span,select,input {
     outline-color: #2370ff;
 }
+div {
+    touch-action: pan-y !important;
+}
 
 img {
     user-select: none !important;
@@ -505,10 +508,12 @@ let currentX = 0;
 let dragging = false;
 let sidebarWidth = 0;
 let dragThreshold = 0;
+let closeDragThreshold = 50; // المسافة المسموح بها من الحافة اليمنى للإغلاق
 
 let isVerticalDrag = false;
 let isHorizontalDrag = false;
 let startScrollTop = 0;
+let lastY = 0; // لتتبع آخر نقطة لمس
 
 // ==================== تحديث العرض ====================
 
@@ -569,15 +574,31 @@ function isDragFromLeftEdge(clientX) {
     return clientX <= dragThreshold;
 }
 
+function isDragFromRightEdge(clientX) {
+    if (!sidebar.classList.contains('open')) return false;
+    
+    const sidebarRect = sidebar.getBoundingClientRect();
+    const dragStartX = clientX - sidebarRect.left;
+    
+    // التحقق إذا كانت نقطة اللمس في أول 40px من اليمين
+    return dragStartX >= (sidebarWidth - closeDragThreshold) && dragStartX <= sidebarWidth;
+}
+
 // ==================== بدء السحب ====================
 
 function startDrag(e) {
+    // منع السلوك الافتراضي فقط للأحداث التي نريد التحكم بها
+    if (e.type === 'touchstart' && isOpen) {
+        // لا نمنع السلوك الافتراضي هنا لنسمح بالسكرول
+    }
+
     const isTouch = e.type.includes('touch');
     const clientX = isTouch ? e.touches[0].clientX : e.clientX;
     const clientY = isTouch ? e.touches[0].clientY : e.clientY;
 
     // سحب من الحافة عند الإغلاق
     if (!isOpen && isDragFromLeftEdge(clientX)) {
+        e.preventDefault(); // نمنع السلوك الافتراضي فقط عند سحب القائمة
         dragging = true;
         startX = clientX;
         currentX = clientX;
@@ -594,24 +615,31 @@ function startDrag(e) {
         return;
     }
 
-    // عند الفتح
+    // عند الفتح - السماح بالسحب فقط من الحافة اليمنى
     if (isOpen && sidebar.contains(e.target)) {
-        dragging = true;
-        startX = clientX;
-        startY = clientY;
-        currentX = clientX;
-        startScrollTop = sidebar.scrollTop;
+        // التحقق من أن السحب يبدأ من الحافة اليمنى فقط
+        if (isDragFromRightEdge(clientX)) {
+            e.preventDefault(); // نمنع السلوك الافتراضي فقط عند سحب القائمة من الحافة
+            dragging = true;
+            startX = clientX;
+            startY = clientY;
+            lastY = clientY;
+            currentX = clientX;
+            startScrollTop = sidebar.scrollTop;
 
-        isVerticalDrag = false;
-        isHorizontalDrag = false;
+            isVerticalDrag = false;
+            isHorizontalDrag = false;
 
-        sidebar.style.transition = 'none';
-        updateSidebarWidth();
+            sidebar.style.transition = 'none';
+            updateSidebarWidth();
 
-        document.addEventListener('mousemove', onDrag);
-        document.addEventListener('mouseup', endDrag);
-        document.addEventListener('touchmove', onDrag, { passive: false });
-        document.addEventListener('touchend', endDrag);
+            document.addEventListener('mousemove', onDrag);
+            document.addEventListener('mouseup', endDrag);
+            document.addEventListener('touchmove', onDrag, { passive: false });
+            document.addEventListener('touchend', endDrag);
+        }
+        // إذا لم يكن السحب من الحافة اليمنى، نسمح بالسكرول العادي
+        // لا نفعل شيئاً، نترك المتصفح يتعامل مع السكرول بشكل طبيعي
     }
 }
 
@@ -619,6 +647,7 @@ function startDrag(e) {
 
 function onDragFromEdge(e) {
     if (!dragging) return;
+    e.preventDefault(); // منع السلوك الافتراضي أثناء السحب
 
     const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
     let deltaX = clientX - startX;
@@ -666,13 +695,16 @@ function onDrag(e) {
 
     // ================= سكرول عمودي =================
     if (isVerticalDrag) {
-        e.preventDefault();
-        sidebar.scrollTop = startScrollTop - deltaY;
+        // نسمح بالسكرول الطبيعي بدون منع السلوك الافتراضي
+        // فقط نقوم بتحديث موضع السكرول
+        sidebar.scrollTop = startScrollTop + (startY - clientY);
+        
+        // لا نستخدم preventDefault() هنا لنسمح للسكرول بالعمل بشكل طبيعي
     }
 
     // ================= سحب أفقي =================
     if (isHorizontalDrag && deltaX < 0) {
-        e.preventDefault();
+        e.preventDefault(); // نمنع السلوك الافتراضي فقط عند السحب الأفقي
         let newLeft = Math.max(deltaX, -sidebarWidth);
         sidebar.style.left = newLeft + 'px';
         currentX = clientX;
@@ -700,8 +732,9 @@ function endDrag() {
 
 // ==================== إضافة المستمعين ====================
 
+// نستخدم { passive: true } للأحداث التي لا نريد منعها
 document.addEventListener('mousedown', startDrag);
-document.addEventListener('touchstart', startDrag, { passive: false });
+document.addEventListener('touchstart', startDrag, { passive: true }); // غيرنا إلى passive: true
 
 // إغلاق عند الضغط خارج السايد بار
 document.addEventListener('click', (e) => {
@@ -714,13 +747,32 @@ document.addEventListener('touchstart', (e) => {
     if (isOpen && !sidebar.contains(e.target) && e.target !== toggleBtn) {
         closeSidebar(500);
     }
-}, { passive: false });
+}, { passive: true }); // غيرنا إلى passive: true
 
 // ==================== الحالة الابتدائية ====================
 
 setTimeout(() => {
     closeSidebar(0);
 }, 100);
+
+// ==================== إضافة مؤشر بصري لمنطقة السحب (اختياري) ====================
+
+// لإظهار منطقة السحب بشكل مرئي للمستخدم
+function showDragArea() {
+    if (isOpen) {
+        sidebar.classList.add('drag-area-active');
+    }
+}
+
+function hideDragArea() {
+    sidebar.classList.remove('drag-area-active');
+}
+
+// إضافة مستمعات الأحداث لإظهار/إخفاء منطقة السحب
+sidebar.addEventListener('mouseenter', showDragArea);
+sidebar.addEventListener('mouseleave', hideDragArea);
+sidebar.addEventListener('touchstart', showDragArea, { passive: true });
+sidebar.addEventListener('touchend', hideDragArea);
 </script>
 
 
